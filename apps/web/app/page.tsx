@@ -21,8 +21,8 @@ export default async function HomePage() {
   const events = await getEvents();
 
   return (
-    <main>
-      <h1>Events</h1>
+    <main className="p-8">
+      <h1 className="text-2xl font-bold">Events</h1>
 
       {events.length === 0 ? (
         <p>No events yet</p>
