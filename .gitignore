@@ -27,6 +27,9 @@ out/
 build
 dist
 
+# Prisma
+packages/db/src/generated
+
 
 # Debug
 npm-debug.log*
