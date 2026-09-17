@@ -7,7 +7,7 @@
     "dev": "tsx watch --env-file=.env src/server.ts",
     "build": "tsc",
     "start": "node --env-file=.env dist/server.js",
-    "lint": "eslint --max-warnings 0",
+    "lint": "biome lint .",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
@@ -17,10 +17,9 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
+    "@biomejs/biome": "2.5.14",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "26.4.1",
-    "eslint": "10.9.1",
     "tsx": "4.23.13",
     "typescript": "7.0.2"
   }
