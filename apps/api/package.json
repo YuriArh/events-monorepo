@@ -8,7 +8,10 @@
     "build": "tsc",
     "start": "node --env-file=.env dist/server.js",
     "lint": "biome lint .",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "pnpm test:db:push && vitest run",
+    "test:watch": "vitest",
+    "test:db:push": "pnpm --filter @repo/db exec prisma db push --accept-data-loss --url postgresql://postgres:postgres@localhost:5432/eventapp_test"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
@@ -21,6 +24,7 @@
     "@repo/typescript-config": "workspace:*",
     "@types/node": "26.4.1",
     "tsx": "4.23.13",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
   }
 }

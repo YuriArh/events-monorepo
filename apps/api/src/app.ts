@@ -6,7 +6,7 @@ import { eventRoutes } from "./modules/events/event.routes.js";
 
 export function buildApp() {
   const app = Fastify({
-    logger: true,
+    logger: process.env.NODE_ENV !== "test",
   });
 
   app.register(cors, {
