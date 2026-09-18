@@ -88,7 +88,7 @@
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 }
 
-@stylex;
+/* The single @stylex injection point lives at the end of app/globals.css. */
 
 /* Field label card variant */
 [data-slot="field-label"]:has(> [data-slot="field"]) {

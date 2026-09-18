@@ -13,7 +13,8 @@
       "!**/.turbo/**",
       "!**/public/**",
       "!**/packages/db/src/generated/**",
-      "!**/styles/stylex.css"
+      "!**/styles/stylex.css",
+      "!**/app/components/ui/**"
     ]
   },
   "formatter": {
@@ -22,16 +23,17 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "suspicious": {
+        "noUnknownAtRules": {
+          "level": "error",
+          "options": { "ignore": ["stylex"] }
+        }
+      }
     },
     "domains": {
       "react": "recommended",
       "next": "recommended"
-    }
-  },
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
     }
   },
   "javascript": {

@@ -1,0 +1,20 @@
+{
+  "presets": ["next/babel"],
+  "plugins": [
+    [
+      "@stylexjs/babel-plugin",
+      {
+        "runtimeInjection": false,
+        "enableInlinedConditionalMerge": true,
+        "treeshakeCompensation": true,
+        "aliases": {
+          "@/*": ["/ROOT/app/*"]
+        },
+        "unstable_moduleResolution": {
+          "type": "commonJS",
+          "rootDir": "."
+        }
+      }
+    ]
+  ]
+}

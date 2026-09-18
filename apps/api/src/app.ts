@@ -11,6 +11,7 @@ export function buildApp() {
 
   app.register(cors, {
     origin: "http://localhost:3000",
+    methods: ["GET", "POST", "PATCH", "DELETE"],
   });
 
   app.setErrorHandler((error, _request, reply) => {
@@ -19,6 +20,14 @@ export function buildApp() {
         message: "Validation error",
         issues: error.issues,
       });
+    }
+
+    if (error instanceof Error) {
+      const statusCode = Number(Reflect.get(error, "statusCode"));
+
+      if (statusCode >= 400 && statusCode < 500) {
+        return reply.status(statusCode).send({ message: error.message });
+      }
     }
 
     app.log.error(error);

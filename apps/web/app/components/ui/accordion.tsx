@@ -3,7 +3,7 @@ import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import type { StyleXStyles } from "@stylexjs/stylex";
 import { ChevronDownIcon } from "lucide-react";
 
-import { colors, radius, typography } from "@/components/ui/tokens.stylex";
+import { colors, radius, typography } from "@/styles/tokens.stylex";
 import { customClassName, dimensions, spacing } from "@/components/ui/utils";
 
 const accordionDown = stylex.keyframes({
