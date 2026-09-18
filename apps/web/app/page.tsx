@@ -1,7 +1,8 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 import * as stylex from "@stylexjs/stylex";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, Loader2Icon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import {
@@ -28,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
-import { type Event, eventsApi } from "@/lib/events";
+import { type Event, eventKeys, eventsApi } from "@/lib/events";
 
 const spin = stylex.keyframes({
     from: { transform: "rotate(0deg)" },
@@ -181,6 +182,9 @@ const styles = stylex.create({
         gap: "0.5rem",
         paddingBlock: "1rem",
     },
+    fieldError: {
+        color: colors.destructive,
+    },
     spinner: {
         animationName: spin,
         animationDuration: "1s",
@@ -192,84 +196,77 @@ const styles = stylex.create({
 const formatDate = (value: string) =>
     new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
+const messageOf = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
+
 export default function HomePage() {
-    const [events, setEvents] = useState<Event[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const queryClient = useQueryClient();
 
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [name, setName] = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
     const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
 
-    const loadEvents = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            setEvents(await eventsApi.list());
-            setError(null);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load events");
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
+    const {
+        data: events = [],
+        isPending,
+        error: listError,
+    } = useQuery({
+        queryKey: eventKeys.all,
+        queryFn: eventsApi.list,
+    });
 
-    useEffect(() => {
-        loadEvents();
-    }, [loadEvents]);
+    const invalidateEvents = () => queryClient.invalidateQueries({ queryKey: eventKeys.all });
+
+    const saveMutation = useMutation({
+        mutationFn: (input: { name: string }) =>
+            editingEvent ? eventsApi.update(editingEvent.id, input) : eventsApi.create(input),
+        onSuccess: async () => {
+            await invalidateEvents();
+            setIsFormOpen(false);
+        },
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => eventsApi.remove(id),
+        onSuccess: async () => {
+            await invalidateEvents();
+            setDeletingEvent(null);
+        },
+    });
 
     const openCreateForm = () => {
+        saveMutation.reset();
         setEditingEvent(null);
         setName("");
         setIsFormOpen(true);
     };
 
     const openEditForm = (event: Event) => {
+        saveMutation.reset();
         setEditingEvent(event);
         setName(event.name);
         setIsFormOpen(true);
     };
 
-    const handleSubmit = async (formEvent: FormEvent) => {
+    const handleSubmit = (formEvent: FormEvent) => {
         formEvent.preventDefault();
 
         if (!name.trim()) return;
 
-        try {
-            setIsSubmitting(true);
+        saveMutation.mutate({ name });
+    };
 
-            if (editingEvent) {
-                await eventsApi.update(editingEvent.id, { name });
-            } else {
-                await eventsApi.create({ name });
-            }
-
-            setIsFormOpen(false);
-            await loadEvents();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to save event");
-        } finally {
-            setIsSubmitting(false);
+    const handleDelete = () => {
+        if (deletingEvent) {
+            deleteMutation.mutate(deletingEvent.id);
         }
     };
 
-    const handleDelete = async () => {
-        if (!deletingEvent) return;
-
-        try {
-            setIsDeleting(true);
-            await eventsApi.remove(deletingEvent.id);
-            setDeletingEvent(null);
-            await loadEvents();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to delete event");
-        } finally {
-            setIsDeleting(false);
-        }
-    };
+    const pageError = listError
+        ? messageOf(listError, "Failed to load events")
+        : deleteMutation.error
+          ? messageOf(deleteMutation.error, "Failed to delete event")
+          : null;
 
     return (
         <div {...stylex.props(styles.page)}>
@@ -289,11 +286,11 @@ export default function HomePage() {
                     </Button>
                 </div>
 
-                {error && <div {...stylex.props(styles.errorBanner, typography.sm)}>{error}</div>}
+                {pageError && <div {...stylex.props(styles.errorBanner, typography.sm)}>{pageError}</div>}
 
                 <Card style={styles.card}>
                     <CardContent style={styles.cardContent}>
-                        {isLoading ? (
+                        {isPending ? (
                             <div {...stylex.props(styles.stateBox, typography.sm)}>
                                 <Loader2Icon {...stylex.props(styles.spinner)} size={16} />
                                 Loading events…
@@ -388,14 +385,19 @@ export default function HomePage() {
                                 placeholder="e.g. Team offsite"
                                 autoFocus
                             />
+                            {saveMutation.error && (
+                                <p {...stylex.props(styles.fieldError, typography.sm)}>
+                                    {messageOf(saveMutation.error, "Failed to save event")}
+                                </p>
+                            )}
                         </div>
 
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={isSubmitting || !name.trim()}>
-                                {isSubmitting && <Loader2Icon {...stylex.props(styles.spinner)} />}
+                            <Button type="submit" disabled={saveMutation.isPending || !name.trim()}>
+                                {saveMutation.isPending && <Loader2Icon {...stylex.props(styles.spinner)} />}
                                 {editingEvent ? "Save" : "Create"}
                             </Button>
                         </DialogFooter>
@@ -414,9 +416,9 @@ export default function HomePage() {
                         <AlertDialogAction
                             variant="destructive"
                             style={styles.destructiveAction}
-                            disabled={isDeleting}
+                            disabled={deleteMutation.isPending}
                             onClick={handleDelete}>
-                            {isDeleting && <Loader2Icon {...stylex.props(styles.spinner)} />}
+                            {deleteMutation.isPending && <Loader2Icon {...stylex.props(styles.spinner)} />}
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>

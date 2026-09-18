@@ -30,6 +30,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return response.json() as Promise<T>;
 }
 
+export const eventKeys = {
+    all: ["events"] as const,
+};
+
 export const eventsApi = {
     list: () => request<Event[]>("/api/events"),
     create: (data: { name: string }) =>
