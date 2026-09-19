@@ -9,12 +9,14 @@
     "start": "node --env-file=.env dist/server.js",
     "lint": "biome lint .",
     "check-types": "tsc --noEmit",
-    "test": "pnpm test:db:push && vitest run",
+    "test": "pnpm test:db:migrate && vitest run",
     "test:watch": "vitest",
-    "test:db:push": "pnpm --filter @repo/db exec prisma db push --accept-data-loss --url postgresql://postgres:postgres@localhost:5432/eventapp_test"
+    "test:db:migrate": "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/eventapp_test pnpm --filter @repo/db exec prisma migrate deploy"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
+    "@fastify/multipart": "^10.1.1",
+    "@fastify/static": "^10.1.4",
     "@repo/db": "workspace:*",
     "fastify": "^5.12.5",
     "zod": "4.6.5"

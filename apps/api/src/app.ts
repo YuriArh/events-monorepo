@@ -1,7 +1,11 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { ZodError } from "zod";
 
+import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
+import { addressRoutes } from "./modules/addresses/address.routes.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
 
 export function buildApp() {
@@ -12,6 +16,16 @@ export function buildApp() {
   app.register(cors, {
     origin: "http://localhost:3000",
     methods: ["GET", "POST", "PATCH", "DELETE"],
+  });
+
+  app.register(multipart, {
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+  });
+
+  // Serves the files written by POST /api/events/upload.
+  app.register(fastifyStatic, {
+    root: UPLOADS_DIR,
+    prefix: "/uploads/",
   });
 
   app.setErrorHandler((error, _request, reply) => {
@@ -41,6 +55,7 @@ export function buildApp() {
   });
 
   app.register(eventRoutes, { prefix: "/api/events" });
+  app.register(addressRoutes, { prefix: "/api/addresses" });
 
   return app;
 }

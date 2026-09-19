@@ -8,8 +8,40 @@ datasource db {
 }
 
 model Event {
-  id        String   @id @default(cuid())
-  name      String
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  /// Filename within the API's uploads directory, not a URL.
+  imageKey    String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  /// A venue is reusable: many events can share one address.
+  addressId String?
+  address   Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+
+  @@index([startsAt])
+  @@index([addressId])
+}
+
+/// A reusable venue. Deleting one detaches it from its events rather than
+/// deleting them (see onDelete: SetNull above).
+model Address {
+  id         String  @id @default(cuid())
+  label      String?
+  line1      String
+  line2      String?
+  city       String
+  region     String?
+  postalCode String?
+  country    String
+
+  events Event[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([city])
 }

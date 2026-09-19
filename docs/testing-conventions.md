@@ -36,7 +36,8 @@ calculation, non-trivial invariants. A passthrough plus a not-found throw isn't.
   because tests share one database.
 - `DATABASE_URL` is set in `vitest.config.ts` (not a setup file) because
   `@repo/db` builds its connection pool at import time.
-- `pnpm test` runs `test:db:push` first, so the schema is always current.
+- `pnpm test` runs `test:db:migrate` (`prisma migrate deploy`) first, so the
+  test database is always at the latest migration.
 
 The API logger is silenced when `NODE_ENV === "test"`.
 

@@ -59,6 +59,57 @@ Routes translate domain errors into responses. The global error handler in
 Do not let the handler swallow a client error as a 500 — that once masked a
 malformed-request bug as a server fault.
 
+## Database migrations
+
+Schema changes go through `prisma migrate`, never `db push` — migrations are
+reviewable SQL files in `packages/db/prisma/migrations/`.
+
+```bash
+pnpm --filter @repo/db exec prisma migrate dev --name <change>   # author + apply
+pnpm --filter @repo/db exec prisma migrate deploy                # apply existing
+pnpm --filter @repo/db exec prisma migrate status                # check drift
+```
+
+Adding a **required** column to a populated table cannot be done in one step.
+Generate the migration without running it, then edit it into expand → backfill →
+contract:
+
+```bash
+prisma migrate dev --create-only --name add_thing
+# edit migration.sql: add nullable, UPDATE to backfill, then SET NOT NULL
+prisma migrate dev
+```
+
+`20260918134547_add_event_details` is the worked example.
+
+To put an existing database under migration control without dropping it, write
+the current state to a migration and mark it applied rather than executing it:
+
+```bash
+prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script -o <file>
+prisma migrate resolve --applied <migration_name>
+```
+
+Prisma blocks AI agents from running destructive migrate commands unless
+`PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` is set to the user's consent text.
+
+## Image uploads
+
+`POST /api/events/upload` takes a multipart file and returns `{ imageKey }`;
+the event is then created or updated with that key as a normal JSON request.
+Keeping upload separate leaves the event contract as plain JSON.
+
+- Files land in `apps/api/uploads/` (gitignored) and are served at `/uploads/*`.
+- The stored `imageKey` is a **filename, not a URL** — swapping local disk for
+  object storage later should only change how URLs are built.
+- Filenames are generated server-side. A client-supplied filename can contain
+  path separators and escape the uploads directory.
+- Type is allowlisted by MIME type, size capped at 5MB.
+- Deleting an event deletes its file; replacing an image deletes the old one.
+
+Local disk does not survive container restarts or redeploys. This is fine for
+development; production needs object storage.
+
 ## Environment
 
 | Variable              | Used by  | Notes                                     |
