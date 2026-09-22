@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createEventInput, createEventPayload } from "./event.js";
+import { createEventInput, createEventPayload } from "./index.js";
 
 describe("createEventInput (wire shape)", () => {
   it("keeps dates as ISO strings", () => {
