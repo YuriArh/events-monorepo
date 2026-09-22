@@ -1,7 +1,8 @@
+import { createEventInput } from "@repo/contracts";
 import { describe, expect, it } from "vitest";
 
 import type { EventRecord } from "./events";
-import { emptyFormValues, toEventInput, toFormValues, venueIsEmpty } from "./event-form";
+import { emptyFormValues, issuesByField, toEventInput, toFormValues, venueIsEmpty } from "./event-form";
 
 const record: EventRecord = {
     id: "e1",
@@ -84,5 +85,20 @@ describe("venueIsEmpty", () => {
 
     it("is false once any field has content", () => {
         expect(venueIsEmpty({ ...emptyFormValues().venue, city: "Amsterdam" })).toBe(false);
+    });
+});
+
+describe("issuesByField", () => {
+    it("keys zod issues by their field path", () => {
+        const result = createEventInput.safeParse({ name: "" });
+
+        expect(result.success).toBe(false);
+        if (result.success) return;
+
+        expect(issuesByField(result.error.issues)).toHaveProperty("name");
+    });
+
+    it("puts path-less issues under the form key", () => {
+        expect(issuesByField([{ path: [], message: "bad" }])).toEqual({ form: "bad" });
     });
 });

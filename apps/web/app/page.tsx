@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, Loader2Icon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
@@ -234,13 +235,6 @@ export default function HomePage() {
         },
     });
 
-    const openCreateForm = () => {
-        saveMutation.reset();
-        setEditingEvent(null);
-        setName("");
-        setIsFormOpen(true);
-    };
-
     const openEditForm = (event: EventRecord) => {
         saveMutation.reset();
         setEditingEvent(event);
@@ -280,7 +274,7 @@ export default function HomePage() {
                                 : "Create and manage your events"}
                         </p>
                     </div>
-                    <Button onClick={openCreateForm}>
+                    <Button render={<Link href="/events/new" />}>
                         <PlusIcon />
                         New Event
                     </Button>
@@ -306,7 +300,7 @@ export default function HomePage() {
                                         Get started by creating your first event.
                                     </p>
                                 </div>
-                                <Button variant="outline" onClick={openCreateForm}>
+                                <Button variant="outline" render={<Link href="/events/new" />}>
                                     <PlusIcon />
                                     New Event
                                 </Button>

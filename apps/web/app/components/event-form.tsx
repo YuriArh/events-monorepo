@@ -1,0 +1,189 @@
+"use client";
+
+import { useState } from "react";
+import * as stylex from "@stylexjs/stylex";
+import { useForm } from "@tanstack/react-form";
+import { Loader2Icon } from "lucide-react";
+import { createEventInput } from "@repo/contracts";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { issuesByField, toEventInput, venueIsEmpty, type EventFormValues } from "@/lib/event-form";
+import { colors, radius, typography } from "@/styles/tokens.stylex";
+
+const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } });
+
+const styles = stylex.create({
+    form: { display: "flex", flexDirection: "column", gap: "1.5rem" },
+    field: { display: "grid", gap: "0.5rem" },
+    row: {
+        display: "grid",
+        gap: "1rem",
+        gridTemplateColumns: { default: "1fr", "@media (min-width: 640px)": "1fr 1fr" },
+    },
+    error: { color: colors.destructive },
+    banner: {
+        borderRadius: radius.lg,
+        borderWidth: "1px",
+        borderStyle: "solid",
+        borderColor: `color-mix(in oklab, ${colors.destructive} 30%, transparent)`,
+        backgroundColor: `color-mix(in oklab, ${colors.destructive} 10%, transparent)`,
+        color: colors.destructive,
+        paddingInline: "1rem",
+        paddingBlock: "0.75rem",
+    },
+    actions: { display: "flex", justifyContent: "flex-end", gap: "0.5rem" },
+    spinner: {
+        animationName: spin,
+        animationDuration: "1s",
+        animationIterationCount: "infinite",
+        animationTimingFunction: "linear",
+    },
+});
+
+export type EventFormProps = {
+    initialValues: EventFormValues;
+    submitLabel: string;
+    onSubmit: (values: EventFormValues) => Promise<void>;
+    onCancel: () => void;
+};
+
+export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: EventFormProps) {
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+    const form = useForm({
+        defaultValues: initialValues,
+        onSubmit: async ({ value }) => {
+            setSubmitError(null);
+            setFieldErrors({});
+
+            // The contract is the authority; the field rules above are just fast feedback.
+            const parsed = createEventInput.safeParse(
+                toEventInput(value, { imageKey: null, addressId: null }),
+            );
+
+            if (!parsed.success) {
+                setFieldErrors(issuesByField(parsed.error.issues));
+                return;
+            }
+
+            try {
+                await onSubmit(value);
+            } catch (error) {
+                // The form keeps its values so the user can retry — see the
+                // partial-failure note in the design doc.
+                setSubmitError(error instanceof Error ? error.message : "Something went wrong");
+            }
+        },
+    });
+
+    return (
+        <form
+            {...stylex.props(styles.form)}
+            onSubmit={(event) => {
+                event.preventDefault();
+                form.handleSubmit();
+            }}>
+            {submitError && <div {...stylex.props(styles.banner, typography.sm)}>{submitError}</div>}
+
+            <form.Field
+                name="name"
+                validators={{
+                    onChange: ({ value }: { value: string }) =>
+                        value.trim() === "" ? "Name is required" : undefined,
+                }}>
+                {(field) => (
+                    <div {...stylex.props(styles.field)}>
+                        <Label htmlFor="name">Name</Label>
+                        <Input
+                            id="name"
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(event) => field.handleChange(event.target.value)}
+                            placeholder="e.g. Team offsite"
+                        />
+                        {(field.state.meta.errors.length > 0 || fieldErrors.name) && (
+                            <p {...stylex.props(styles.error, typography.sm)}>
+                                {String(field.state.meta.errors[0] ?? fieldErrors.name)}
+                            </p>
+                        )}
+                    </div>
+                )}
+            </form.Field>
+
+            <form.Field name="description">
+                {(field) => (
+                    <div {...stylex.props(styles.field)}>
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                            id="description"
+                            rows={4}
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(event) => field.handleChange(event.target.value)}
+                        />
+                    </div>
+                )}
+            </form.Field>
+
+            <div {...stylex.props(styles.row)}>
+                <form.Field name="startsAt">
+                    {(field) => (
+                        <div {...stylex.props(styles.field)}>
+                            <Label htmlFor="startsAt">Starts</Label>
+                            <Input
+                                id="startsAt"
+                                type="datetime-local"
+                                value={toLocalInput(field.state.value)}
+                                onBlur={field.handleBlur}
+                                onChange={(event) => field.handleChange(fromLocalInput(event.target.value))}
+                            />
+                        </div>
+                    )}
+                </form.Field>
+
+                <form.Field name="endsAt">
+                    {(field) => (
+                        <div {...stylex.props(styles.field)}>
+                            <Label htmlFor="endsAt">Ends</Label>
+                            <Input
+                                id="endsAt"
+                                type="datetime-local"
+                                value={toLocalInput(field.state.value)}
+                                onBlur={field.handleBlur}
+                                onChange={(event) => field.handleChange(fromLocalInput(event.target.value))}
+                            />
+                        </div>
+                    )}
+                </form.Field>
+            </div>
+
+            <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+                {([canSubmit, isSubmitting]) => (
+                    <div {...stylex.props(styles.actions)}>
+                        <Button type="button" variant="outline" onClick={onCancel}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={!canSubmit || isSubmitting}>
+                            {isSubmitting && <Loader2Icon {...stylex.props(styles.spinner)} />}
+                            {submitLabel}
+                        </Button>
+                    </div>
+                )}
+            </form.Subscribe>
+        </form>
+    );
+}
+
+/** `datetime-local` speaks "YYYY-MM-DDTHH:mm" in local time, with no offset. */
+const toLocalInput = (value: Date | null) => {
+    if (!value) return "";
+
+    const pad = (part: number) => String(part).padStart(2, "0");
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+};
+
+const fromLocalInput = (value: string) => (value === "" ? null : new Date(value));
