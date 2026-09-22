@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { issuesByField, toEventInput, venueIsEmpty, type EventFormValues } from "@/lib/event-form";
+import { imageUrl } from "@/lib/events";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
 const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } });
@@ -35,6 +36,8 @@ const styles = stylex.create({
         paddingBlock: "0.75rem",
     },
     actions: { display: "flex", justifyContent: "flex-end", gap: "0.5rem" },
+    preview: { width: "8rem", height: "8rem", objectFit: "cover", borderRadius: radius.md },
+    imageRow: { display: "flex", alignItems: "center", gap: "1rem" },
     spinner: {
         animationName: spin,
         animationDuration: "1s",
@@ -160,6 +163,36 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                     )}
                 </form.Field>
             </div>
+
+            <form.Field name="imageFile">
+                {(field) => {
+                    const existingKey = form.state.values.existingImageKey;
+                    const preview = field.state.value
+                        ? URL.createObjectURL(field.state.value)
+                        : existingKey
+                          ? imageUrl(existingKey)
+                          : null;
+
+                    return (
+                        <div {...stylex.props(styles.field)}>
+                            <Label htmlFor="image">Image</Label>
+                            <div {...stylex.props(styles.imageRow)}>
+                                {preview && (
+                                    <img src={preview} alt="" {...stylex.props(styles.preview)} />
+                                )}
+                                <Input
+                                    id="image"
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    onChange={(event) =>
+                                        field.handleChange(event.target.files?.[0] ?? null)
+                                    }
+                                />
+                            </div>
+                        </div>
+                    );
+                }}
+            </form.Field>
 
             <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
                 {([canSubmit, isSubmitting]) => (

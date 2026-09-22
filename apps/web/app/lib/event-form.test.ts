@@ -1,8 +1,15 @@
 import { createEventInput } from "@repo/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { EventRecord } from "./events";
-import { emptyFormValues, issuesByField, toEventInput, toFormValues, venueIsEmpty } from "./event-form";
+import {
+    emptyFormValues,
+    issuesByField,
+    resolveImageKey,
+    toEventInput,
+    toFormValues,
+    venueIsEmpty,
+} from "./event-form";
 
 const record: EventRecord = {
     id: "e1",
@@ -85,6 +92,25 @@ describe("venueIsEmpty", () => {
 
     it("is false once any field has content", () => {
         expect(venueIsEmpty({ ...emptyFormValues().venue, city: "Amsterdam" })).toBe(false);
+    });
+});
+
+describe("resolveImageKey", () => {
+    it("keeps the existing key when no new file was chosen", async () => {
+        const upload = vi.fn();
+        const values = { ...emptyFormValues(), existingImageKey: "old.png", imageFile: null };
+
+        await expect(resolveImageKey(values, upload)).resolves.toBe("old.png");
+        expect(upload).not.toHaveBeenCalled();
+    });
+
+    it("uploads and returns the new key when a file was chosen", async () => {
+        const upload = vi.fn().mockResolvedValue({ imageKey: "new.png" });
+        const file = new File(["x"], "photo.png", { type: "image/png" });
+        const values = { ...emptyFormValues(), existingImageKey: "old.png", imageFile: file };
+
+        await expect(resolveImageKey(values, upload)).resolves.toBe("new.png");
+        expect(upload).toHaveBeenCalledWith(file);
     });
 });
 

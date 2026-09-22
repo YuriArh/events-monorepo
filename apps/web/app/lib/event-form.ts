@@ -18,6 +18,8 @@ export type EventFormValues = {
     startsAt: Date | null;
     endsAt: Date | null;
     venue: VenueValues;
+    imageFile: File | null;
+    existingImageKey: string | null;
 };
 
 const emptyVenue = (): VenueValues => ({
@@ -36,6 +38,8 @@ export const emptyFormValues = (): EventFormValues => ({
     startsAt: null,
     endsAt: null,
     venue: emptyVenue(),
+    imageFile: null,
+    existingImageKey: null,
 });
 
 /** Text inputs yield "" for absent values; the API wants null. */
@@ -60,6 +64,8 @@ export const toFormValues = (event: EventRecord): EventFormValues => ({
               country: event.address.country,
           }
         : emptyVenue(),
+    imageFile: null,
+    existingImageKey: event.imageKey,
 });
 
 export const venueIsEmpty = (venue: VenueValues) =>
@@ -82,6 +88,23 @@ export const toEventInput = (
     imageKey: resolved.imageKey,
     addressId: resolved.addressId,
 });
+
+/**
+ * Step 1 of the submit sequence. Uploading only on submit means an abandoned
+ * form leaves nothing behind.
+ */
+export const resolveImageKey = async (
+    values: EventFormValues,
+    upload: (file: File) => Promise<{ imageKey: string }>,
+): Promise<string | null> => {
+    if (!values.imageFile) {
+        return values.existingImageKey;
+    }
+
+    const { imageKey } = await upload(values.imageFile);
+
+    return imageKey;
+};
 
 /** Shapes zod issues (from the client parse or a server 400) for field display. */
 export const issuesByField = (issues: Array<{ path: PropertyKey[]; message: string }>) => {
