@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
-import { type Event, eventKeys, eventsApi } from "@/lib/events";
+import { type EventRecord, eventKeys, eventsApi } from "@/lib/events";
 
 const spin = stylex.keyframes({
     from: { transform: "rotate(0deg)" },
@@ -202,9 +202,9 @@ export default function HomePage() {
     const queryClient = useQueryClient();
 
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+    const [editingEvent, setEditingEvent] = useState<EventRecord | null>(null);
     const [name, setName] = useState("");
-    const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
+    const [deletingEvent, setDeletingEvent] = useState<EventRecord | null>(null);
 
     const {
         data: events = [],
@@ -241,7 +241,7 @@ export default function HomePage() {
         setIsFormOpen(true);
     };
 
-    const openEditForm = (event: Event) => {
+    const openEditForm = (event: EventRecord) => {
         saveMutation.reset();
         setEditingEvent(event);
         setName(event.name);
