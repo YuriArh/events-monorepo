@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as stylex from "@stylexjs/stylex";
 import { useForm } from "@tanstack/react-form";
 import { Loader2Icon } from "lucide-react";
@@ -45,6 +45,28 @@ const styles = stylex.create({
         animationTimingFunction: "linear",
     },
 });
+
+function ImagePreview({ file, existingKey }: { file: File | null; existingKey: string | null }) {
+    const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!file) {
+            setObjectUrl(null);
+            return;
+        }
+
+        const url = URL.createObjectURL(file);
+        setObjectUrl(url);
+
+        return () => URL.revokeObjectURL(url);
+    }, [file]);
+
+    const src = objectUrl ?? (existingKey ? imageUrl(existingKey) : null);
+
+    if (!src) return null;
+
+    return <img src={src} alt="" {...stylex.props(styles.preview)} />;
+}
 
 export type EventFormProps = {
     initialValues: EventFormValues;
@@ -165,33 +187,23 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
             </div>
 
             <form.Field name="imageFile">
-                {(field) => {
-                    const existingKey = form.state.values.existingImageKey;
-                    const preview = field.state.value
-                        ? URL.createObjectURL(field.state.value)
-                        : existingKey
-                          ? imageUrl(existingKey)
-                          : null;
-
-                    return (
-                        <div {...stylex.props(styles.field)}>
-                            <Label htmlFor="image">Image</Label>
-                            <div {...stylex.props(styles.imageRow)}>
-                                {preview && (
-                                    <img src={preview} alt="" {...stylex.props(styles.preview)} />
-                                )}
-                                <Input
-                                    id="image"
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp,image/gif"
-                                    onChange={(event) =>
-                                        field.handleChange(event.target.files?.[0] ?? null)
-                                    }
-                                />
-                            </div>
+                {(field) => (
+                    <div {...stylex.props(styles.field)}>
+                        <Label htmlFor="image">Image</Label>
+                        <div {...stylex.props(styles.imageRow)}>
+                            <ImagePreview
+                                file={field.state.value}
+                                existingKey={form.state.values.existingImageKey}
+                            />
+                            <Input
+                                id="image"
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                onChange={(event) => field.handleChange(event.target.files?.[0] ?? null)}
+                            />
                         </div>
-                    );
-                }}
+                    </div>
+                )}
             </form.Field>
 
             <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
