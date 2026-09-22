@@ -53,8 +53,8 @@ const seed = async () => {
         endsAt: from(2, 15),
         addressId: riverside.id,
       },
-      // Same venue as above: the point of a reusable address.
-      { name: "Community meetup", startsAt: from(21, 18), addressId: riverside.id },
+      // 1:1 — this event has no venue; riverside is already taken above.
+      { name: "Community meetup", startsAt: from(21, 18) },
       // No venue yet, to exercise the optional relation.
       { name: "Unscheduled retro" },
     ],

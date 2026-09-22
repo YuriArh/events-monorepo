@@ -18,6 +18,14 @@ export class UnknownAddressError extends Error {
   }
 }
 
+/** 1:1: another event already owns this address. */
+export class AddressAlreadyLinkedError extends Error {
+  constructor(id: string) {
+    super(`Address with id "${id}" is already linked to an event`);
+    this.name = "AddressAlreadyLinkedError";
+  }
+}
+
 export class InvalidEventDateRangeError extends Error {
   constructor() {
     super("endsAt must be after startsAt");
@@ -34,6 +42,16 @@ const assertAddressExists = async (addressId: string | null | undefined) => {
 
   if (!(await addressRepository.findById(addressId))) {
     throw new UnknownAddressError(addressId);
+  }
+};
+
+const assertAddressFree = async (addressId: string | null | undefined, exceptEventId?: string) => {
+  if (!addressId) return;
+
+  const occupant = await eventRepository.findByAddressId(addressId);
+
+  if (occupant && occupant.id !== exceptEventId) {
+    throw new AddressAlreadyLinkedError(addressId);
   }
 };
 
@@ -72,6 +90,7 @@ export const eventService = {
   async create(input: CreateEventInput) {
     assertDateRange(input.startsAt, input.endsAt);
     await assertAddressExists(input.addressId);
+    await assertAddressFree(input.addressId);
 
     return eventRepository.create(input);
   },
@@ -83,6 +102,7 @@ export const eventService = {
     // dates can still be invalid once combined with what is already stored.
     assertDateRange(merge(input.startsAt, existing.startsAt), merge(input.endsAt, existing.endsAt));
     await assertAddressExists(input.addressId);
+    await assertAddressFree(input.addressId, id);
 
     const updated = await eventRepository.update(id, input);
 

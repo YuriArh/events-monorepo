@@ -101,16 +101,15 @@ describe("linking events to a venue", () => {
         });
     });
 
-    it("lets several events share one venue", async () => {
+    it("rejects a second event on the same venue", async () => {
         const address = await createAddress();
 
-        await createEvent({ name: "first", addressId: address.id });
-        await createEvent({ name: "second", addressId: address.id });
+        const first = await createEvent({ name: "first", addressId: address.id });
+        const second = await createEvent({ name: "second", addressId: address.id });
 
-        const response = await app.inject({ method: "GET", url: "/api/events" });
-        const linked = response.json().filter((event: { addressId: string }) => event.addressId === address.id);
-
-        expect(linked).toHaveLength(2);
+        expect(first.statusCode).toBe(201);
+        expect(second.statusCode).toBe(400);
+        expect(second.json().message).toContain("already linked");
     });
 
     // Without the up-front check this surfaces as a raw foreign-key violation,
@@ -139,8 +138,8 @@ describe("linking events to a venue", () => {
 });
 
 describe("DELETE /api/addresses/:id", () => {
-    // onDelete: SetNull — removing a venue must not cascade into its events.
-    it("keeps the events and clears their link", async () => {
+    // onDelete: SetNull — removing a venue must not cascade into its event.
+    it("keeps the event and clears its link", async () => {
         const address = await createAddress();
         const event = (await createEvent({ addressId: address.id })).json<{ id: string }>();
 

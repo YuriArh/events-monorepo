@@ -17,6 +17,7 @@ import {
   updateEventSchema,
 } from "./event.schema.js";
 import {
+  AddressAlreadyLinkedError,
   EventNotFoundError,
   InvalidEventDateRangeError,
   UnknownAddressError,
@@ -29,7 +30,11 @@ const replyForDomainError = (error: unknown, reply: FastifyReply) => {
     return reply.status(404).send({ message: error.message });
   }
 
-  if (error instanceof UnknownAddressError || error instanceof InvalidEventDateRangeError) {
+  if (
+    error instanceof UnknownAddressError ||
+    error instanceof AddressAlreadyLinkedError ||
+    error instanceof InvalidEventDateRangeError
+  ) {
     return reply.status(400).send({ message: error.message });
   }
 

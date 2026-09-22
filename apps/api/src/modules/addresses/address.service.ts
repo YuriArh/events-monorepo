@@ -33,8 +33,8 @@ export const addressService = {
     return addressRepository.update(id, input);
   },
 
-  // Events referencing this address are detached rather than deleted; the
-  // SET NULL foreign key in the schema does that for us.
+  // The linked event is detached rather than deleted; the SET NULL foreign
+  // key in the schema does that for us.
   async remove(id: string) {
     await this.getById(id);
 

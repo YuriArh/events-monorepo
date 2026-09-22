@@ -18,16 +18,16 @@ model Event {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  /// A venue is reusable: many events can share one address.
-  addressId String?
+  /// Unique: at most one event may point at a given address (1:1).
+  addressId String?  @unique
   address   Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
 
   @@index([startsAt])
-  @@index([addressId])
 }
 
-/// A reusable venue. Deleting one detaches it from its events rather than
-/// deleting them (see onDelete: SetNull above).
+/// Optional 1:1 with Event. The foreign key lives on Event (`addressId`), not
+/// here — so an address can exist before it is linked, and deleting it only
+/// nulls that event's `addressId` (onDelete: SetNull).
 model Address {
   id         String  @id @default(cuid())
   label      String?
@@ -38,7 +38,7 @@ model Address {
   postalCode String?
   country    String
 
-  events Event[]
+  event Event?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

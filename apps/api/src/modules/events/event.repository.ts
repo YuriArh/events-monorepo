@@ -14,6 +14,10 @@ export const eventRepository = {
     return prisma.event.findUnique({ where: { id }, include: { address: true } });
   },
 
+  findByAddressId(addressId: string) {
+    return prisma.event.findUnique({ where: { addressId } });
+  },
+
   create(data: CreateEventInput) {
     return prisma.event.create({ data, include: { address: true } });
   },
