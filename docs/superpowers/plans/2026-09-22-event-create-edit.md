@@ -1945,30 +1945,228 @@ git commit -m "Cover event create, edit and delete with e2e tests"
 
 ---
 
-### Task 10: Swap the date inputs to the registry Date Picker
+### Task 10: Build a DateTimePicker and use it for the event dates
 
-Deferred from Task 5 because the component's props only exist once Task 4 has
-generated it.
+The stylexui registry has **no** date-picker component — its `date-picker` entry
+ships only `calendar.tsx` (a dates-only `react-day-picker` wrapper) plus
+dependencies. A picker is composed by the consumer. Events need date **and**
+time, so the time half is ours to build either way.
 
 **Files:**
+- Create: `apps/web/app/components/date-time-picker.tsx`
+- Create: `apps/web/app/lib/date-time.ts`, `apps/web/app/lib/date-time.test.ts`
 - Modify: `apps/web/app/components/event-form.tsx`
 
-- [ ] **Step 1: Read the generated component's API**
+**Interfaces:**
+- Consumes: `Calendar` and `Popover` from `@/components/ui/*` (vendored in Task 4)
+- Produces: `<DateTimePicker id value onChange />` where `value: Date | null` and
+  `onChange: (value: Date | null) => void`
 
-Run: `grep -nE "^export (type|function|const)|Props = " apps/web/app/components/ui/date-picker.tsx`
+- [ ] **Step 1: Write the failing test for the date/time merge**
 
-Note the exported component name and the names of its value/onChange props, and
-whether it works in `Date` or strings. Everything below assumes a controlled
-`value: Date | null` / `onValueChange: (value: Date | null) => void`; if the
-generated component differs, adapt the two call sites accordingly — the form
-field API (`field.state.value`, `field.handleChange`) does not change.
+The fiddly part is combining a date chosen on a calendar with a time typed in a
+text field, without either clobbering the other. That is pure logic, so it is
+tested on its own.
 
-- [ ] **Step 2: Replace the two date fields**
+`apps/web/app/lib/date-time.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import { toTimeInput, withDate, withTime } from "./date-time";
+
+describe("withTime", () => {
+    it("sets the time on an existing date", () => {
+        const result = withTime(new Date(2026, 9, 1, 9, 30), "18:45");
+
+        expect(result?.getHours()).toBe(18);
+        expect(result?.getMinutes()).toBe(45);
+        expect(result?.getDate()).toBe(1);
+    });
+
+    it("returns null when there is no date yet", () => {
+        expect(withTime(null, "18:45")).toBeNull();
+    });
+
+    it("ignores an incomplete time string", () => {
+        const date = new Date(2026, 9, 1, 9, 30);
+
+        expect(withTime(date, "")?.getHours()).toBe(9);
+    });
+});
+
+describe("withDate", () => {
+    it("keeps the existing time when the day changes", () => {
+        const result = withDate(new Date(2026, 9, 1, 18, 45), new Date(2026, 9, 8));
+
+        expect(result?.getDate()).toBe(8);
+        expect(result?.getHours()).toBe(18);
+        expect(result?.getMinutes()).toBe(45);
+    });
+
+    it("defaults to midnight when there was no previous value", () => {
+        const result = withDate(null, new Date(2026, 9, 8));
+
+        expect(result?.getHours()).toBe(0);
+        expect(result?.getMinutes()).toBe(0);
+    });
+
+    it("clears the value when no day is given", () => {
+        expect(withDate(new Date(2026, 9, 1), null)).toBeNull();
+    });
+});
+
+describe("toTimeInput", () => {
+    it("formats as zero-padded HH:mm", () => {
+        expect(toTimeInput(new Date(2026, 9, 1, 9, 5))).toBe("09:05");
+    });
+
+    it("is empty for no date", () => {
+        expect(toTimeInput(null)).toBe("");
+    });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm --filter web exec vitest run date-time`
+Expected: FAIL — `Cannot find module './date-time'`
+
+- [ ] **Step 3: Write the helpers**
+
+`apps/web/app/lib/date-time.ts`:
+
+```ts
+/**
+ * A calendar picks a day and a text field picks a time; these merge one into the
+ * other without the second clobbering the first.
+ */
+
+const pad = (part: number) => String(part).padStart(2, "0");
+
+/** "HH:mm" for an <input type="time">. */
+export const toTimeInput = (value: Date | null) =>
+    value ? `${pad(value.getHours())}:${pad(value.getMinutes())}` : "";
+
+/** Applies an "HH:mm" string to an existing date, keeping the day. */
+export const withTime = (value: Date | null, time: string): Date | null => {
+    if (!value) return null;
+
+    const [hours, minutes] = time.split(":").map(Number);
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+
+    const next = new Date(value);
+    next.setHours(hours, minutes, 0, 0);
+
+    return next;
+};
+
+/** Applies a chosen day to an existing value, keeping the time already set. */
+export const withDate = (value: Date | null, day: Date | null): Date | null => {
+    if (!day) return null;
+
+    const next = new Date(day);
+    next.setHours(value?.getHours() ?? 0, value?.getMinutes() ?? 0, 0, 0);
+
+    return next;
+};
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm --filter web exec vitest run date-time`
+Expected: PASS — 8 tests
+
+- [ ] **Step 5: Build the component**
+
+Check the vendored components' real APIs first — the exact export names and props
+come from Task 4's report, and the code below assumes `Calendar` accepts
+react-day-picker's `mode="single"`, `selected` and `onSelect`, and that Popover
+exposes root/trigger/content parts:
+
+Run: `grep -nE "^export" apps/web/app/components/ui/calendar.tsx apps/web/app/components/ui/popover.tsx`
+
+`apps/web/app/components/date-time-picker.tsx`:
+
+```tsx
+"use client";
+
+import * as stylex from "@stylexjs/stylex";
+import { CalendarIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toTimeInput, withDate, withTime } from "@/lib/date-time";
+import { colors, typography } from "@/styles/tokens.stylex";
+
+const styles = stylex.create({
+    row: { display: "flex", gap: "0.5rem" },
+    trigger: { flex: 1, justifyContent: "flex-start", gap: "0.5rem" },
+    placeholder: { color: colors.mutedForeground },
+    time: { width: "8rem" },
+    content: { padding: "0.5rem" },
+});
+
+const formatDay = (value: Date) =>
+    value.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+export type DateTimePickerProps = {
+    id: string;
+    value: Date | null;
+    onChange: (value: Date | null) => void;
+};
+
+export function DateTimePicker({ id, value, onChange }: DateTimePickerProps) {
+    return (
+        <div {...stylex.props(styles.row)}>
+            <Popover>
+                <PopoverTrigger
+                    render={
+                        <Button id={id} type="button" variant="outline" style={styles.trigger}>
+                            <CalendarIcon size={16} />
+                            {value ? (
+                                formatDay(value)
+                            ) : (
+                                <span {...stylex.props(styles.placeholder)}>Pick a date</span>
+                            )}
+                        </Button>
+                    }
+                />
+                <PopoverContent style={styles.content}>
+                    <Calendar
+                        mode="single"
+                        selected={value ?? undefined}
+                        onSelect={(day: Date | undefined) => onChange(withDate(value, day ?? null))}
+                    />
+                </PopoverContent>
+            </Popover>
+
+            <Input
+                type="time"
+                aria-label="Time"
+                style={styles.time}
+                value={toTimeInput(value)}
+                disabled={!value}
+                onChange={(event) => onChange(withTime(value, event.target.value))}
+            />
+        </div>
+    );
+}
+```
+
+If Task 4's report shows different prop names for Calendar or Popover, adapt these
+two call sites to match — the component's own `value`/`onChange` contract does not
+change.
+
+- [ ] **Step 6: Use it for both date fields**
 
 In `apps/web/app/components/event-form.tsx`, add the import:
 
 ```tsx
-import { DatePicker } from "@/components/ui/date-picker";
+import { DateTimePicker } from "@/components/date-time-picker";
 ```
 
 Replace the body of the `startsAt` field:
@@ -1976,50 +2174,51 @@ Replace the body of the `startsAt` field:
 ```tsx
                         <div {...stylex.props(styles.field)}>
                             <Label htmlFor="startsAt">Starts</Label>
-                            <DatePicker
+                            <DateTimePicker
                                 id="startsAt"
                                 value={field.state.value}
-                                onValueChange={(value: Date | null) => field.handleChange(value)}
+                                onChange={(value) => field.handleChange(value)}
                             />
                         </div>
 ```
 
 And the `endsAt` field identically, with `id="endsAt"` and `Ends` as the label.
 
-- [ ] **Step 3: Delete the now-unused local-time helpers**
+- [ ] **Step 7: Delete the now-unused local-time helpers**
 
-Remove `toLocalInput` and `fromLocalInput` from the bottom of the file. Biome
-reports unused declarations, so lint will confirm they are gone.
+Remove `toLocalInput` and `fromLocalInput` from the bottom of `event-form.tsx`.
+Biome reports unused declarations, so lint confirms they are gone.
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 8: Verify**
 
-Run: `pnpm --filter web exec tsc --noEmit && pnpm --filter web exec biome lint .`
-Expected: PASS
+Run: `pnpm --filter web exec tsc --noEmit && pnpm --filter web exec biome lint . && pnpm --filter web exec vitest run && pnpm --filter web build`
+Expected: all PASS
 
-With `pnpm dev` running, set both dates via the picker on `/events/new`, submit,
-and confirm the stored values:
+With `pnpm dev` running, set both dates on `/events/new` — pick a day in the
+popover, type a time — submit, and confirm what was stored:
 
 ```bash
 docker compose exec -T postgres psql -U postgres -d eventapp \
   -c 'SELECT name, "startsAt", "endsAt" FROM "Event" ORDER BY "createdAt" DESC LIMIT 1;'
 ```
 
-Expected: the timestamps match what was picked, in UTC.
+Expected: the timestamps match the day and time picked, stored in UTC.
 
-- [ ] **Step 5: Update the e2e spec for the new control**
+- [ ] **Step 9: Update the e2e spec for the new control**
 
-The spec from Task 9 fills the dates with `getByLabel("Starts").fill(...)`, which
-only works on a native input. Re-run the suite and, if those steps now fail,
-drive the picker through its accessible controls instead:
+Task 9's spec fills dates with `getByLabel("Starts").fill(...)`, which only works
+on a native input. Drive the new control instead — open the popover from the
+"Starts" button, choose a day by its accessible name, then fill the adjacent
+"Time" field:
 
 Run: `pnpm --filter e2e test:e2e`
 Expected: PASS — 3 tests
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add apps/web/app/components/event-form.tsx apps/e2e
-git commit -m "Use the registry date picker for event dates"
+git add apps/web/app/components apps/web/app/lib apps/e2e
+git commit -m "Add a date-time picker composed from popover and calendar"
 ```
 
 ---
