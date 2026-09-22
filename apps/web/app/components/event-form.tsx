@@ -44,6 +44,17 @@ const styles = stylex.create({
         animationIterationCount: "infinite",
         animationTimingFunction: "linear",
     },
+    section: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+        borderTopWidth: "1px",
+        borderTopStyle: "solid",
+        borderTopColor: colors.border,
+        paddingTop: "1.5rem",
+    },
+    sectionTitle: { fontWeight: 500 },
+    hint: { color: colors.mutedForeground },
 });
 
 function ImagePreview({ file, existingKey }: { file: File | null; existingKey: string | null }) {
@@ -81,6 +92,19 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
 
     const form = useForm({
         defaultValues: initialValues,
+        validators: {
+            onSubmit: ({ value }: { value: EventFormValues }) => {
+                if (venueIsEmpty(value.venue)) return undefined;
+
+                const missing = (["line1", "city", "country"] as const).filter(
+                    (key) => value.venue[key].trim() === "",
+                );
+
+                return missing.length > 0
+                    ? { form: "Street, city and country are required when a venue is given." }
+                    : undefined;
+            },
+        },
         onSubmit: async ({ value }) => {
             setSubmitError(null);
             setFieldErrors({});
@@ -205,6 +229,49 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                     </div>
                 )}
             </form.Field>
+
+            <div {...stylex.props(styles.section)}>
+                <div>
+                    <p {...stylex.props(styles.sectionTitle)}>Venue</p>
+                    <p {...stylex.props(styles.hint, typography.sm)}>
+                        Optional. Street, city and country are required together.
+                    </p>
+                </div>
+
+                {(
+                    [
+                        ["venue.label", "Venue name"],
+                        ["venue.line1", "Street"],
+                        ["venue.line2", "Street line 2"],
+                        ["venue.city", "City"],
+                        ["venue.region", "Region"],
+                        ["venue.postalCode", "Postal code"],
+                        ["venue.country", "Country"],
+                    ] as const
+                ).map(([name, label]) => (
+                    <form.Field key={name} name={name}>
+                        {(field) => (
+                            <div {...stylex.props(styles.field)}>
+                                <Label htmlFor={name}>{label}</Label>
+                                <Input
+                                    id={name}
+                                    value={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(event) => field.handleChange(event.target.value)}
+                                />
+                            </div>
+                        )}
+                    </form.Field>
+                ))}
+            </div>
+
+            <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+                {(formError) =>
+                    formError ? (
+                        <p {...stylex.props(styles.error, typography.sm)}>{String(formError)}</p>
+                    ) : null
+                }
+            </form.Subscribe>
 
             <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
                 {([canSubmit, isSubmitting]) => (

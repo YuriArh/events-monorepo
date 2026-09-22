@@ -5,6 +5,7 @@ import type { EventRecord } from "./events";
 import {
     emptyFormValues,
     issuesByField,
+    resolveAddressId,
     resolveImageKey,
     toEventInput,
     toFormValues,
@@ -111,6 +112,53 @@ describe("resolveImageKey", () => {
 
         await expect(resolveImageKey(values, upload)).resolves.toBe("new.png");
         expect(upload).toHaveBeenCalledWith(file);
+    });
+});
+
+describe("resolveAddressId", () => {
+    const api = () => ({
+        create: vi.fn().mockResolvedValue({ id: "new-address" }),
+        update: vi.fn().mockResolvedValue({ id: "existing" }),
+    });
+
+    it("returns null and writes nothing when the venue is empty", async () => {
+        const calls = api();
+
+        await expect(resolveAddressId(emptyFormValues(), null, calls)).resolves.toBeNull();
+        expect(calls.create).not.toHaveBeenCalled();
+        expect(calls.update).not.toHaveBeenCalled();
+    });
+
+    it("creates an address when the event has none", async () => {
+        const calls = api();
+        const values = {
+            ...emptyFormValues(),
+            venue: { ...emptyFormValues().venue, line1: "1 Civic Square", city: "Amsterdam", country: "NL" },
+        };
+
+        await expect(resolveAddressId(values, null, calls)).resolves.toBe("new-address");
+        expect(calls.create).toHaveBeenCalledWith(
+            expect.objectContaining({ line1: "1 Civic Square", city: "Amsterdam", country: "NL" }),
+        );
+    });
+
+    // Safe because the relation is 1:1 — no other event can reference this address.
+    it("updates in place when the event already has an address", async () => {
+        const calls = api();
+        const values = {
+            ...emptyFormValues(),
+            venue: { ...emptyFormValues().venue, line1: "2 New Road", city: "Rotterdam", country: "NL" },
+        };
+
+        await expect(resolveAddressId(values, "existing", calls)).resolves.toBe("existing");
+        expect(calls.update).toHaveBeenCalledWith("existing", expect.objectContaining({ city: "Rotterdam" }));
+    });
+
+    it("detaches when the venue is cleared on an event that had one", async () => {
+        const calls = api();
+
+        await expect(resolveAddressId(emptyFormValues(), "existing", calls)).resolves.toBeNull();
+        expect(calls.update).not.toHaveBeenCalled();
     });
 });
 

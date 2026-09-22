@@ -1,4 +1,4 @@
-import type { CreateEventInput } from "@repo/contracts";
+import type { CreateAddressInput, CreateEventInput } from "@repo/contracts";
 
 import type { EventRecord } from "./events";
 
@@ -104,6 +104,45 @@ export const resolveImageKey = async (
     const { imageKey } = await upload(values.imageFile);
 
     return imageKey;
+};
+
+export const toAddressInput = (venue: VenueValues): CreateAddressInput => ({
+    label: orNull(venue.label),
+    line1: venue.line1.trim(),
+    line2: orNull(venue.line2),
+    city: venue.city.trim(),
+    region: orNull(venue.region),
+    postalCode: orNull(venue.postalCode),
+    country: venue.country.trim(),
+});
+
+type AddressCalls = {
+    create: (input: CreateAddressInput) => Promise<{ id: string }>;
+    update: (id: string, input: CreateAddressInput) => Promise<{ id: string }>;
+};
+
+/**
+ * Step 2 of the submit sequence. Updating in place is safe because Event.addressId
+ * is unique — an address belongs to exactly one event.
+ */
+export const resolveAddressId = async (
+    values: EventFormValues,
+    existingAddressId: string | null,
+    api: AddressCalls,
+): Promise<string | null> => {
+    if (venueIsEmpty(values.venue)) {
+        return null;
+    }
+
+    const input = toAddressInput(values.venue);
+
+    if (existingAddressId) {
+        await api.update(existingAddressId, input);
+        return existingAddressId;
+    }
+
+    const created = await api.create(input);
+    return created.id;
 };
 
 /** Shapes zod issues (from the client parse or a server 400) for field display. */
