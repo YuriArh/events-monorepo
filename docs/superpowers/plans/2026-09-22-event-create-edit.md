@@ -537,7 +537,7 @@ Pure functions, no React. These carry the logic most likely to break silently.
 
 **Interfaces:**
 - Consumes: `EventRecord` from Task 2, `CreateEventInput` from Task 1
-- Produces: `type EventFormValues`, `type VenueValues`, `emptyFormValues`, `toFormValues(event)`, `toEventInput(values, { imageKey, addressId })`, `venueIsEmpty(venue)`, `changedFields(initial, current)`
+- Produces: `type EventFormValues`, `type VenueValues`, `emptyFormValues`, `toFormValues(event)`, `toEventInput(values, { imageKey, addressId })`, `venueIsEmpty(venue)`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -547,13 +547,7 @@ Pure functions, no React. These carry the logic most likely to break silently.
 import { describe, expect, it } from "vitest";
 
 import type { EventRecord } from "./events";
-import {
-    changedFields,
-    emptyFormValues,
-    toEventInput,
-    toFormValues,
-    venueIsEmpty,
-} from "./event-form";
+import { emptyFormValues, toEventInput, toFormValues, venueIsEmpty } from "./event-form";
 
 const record: EventRecord = {
     id: "e1",
@@ -636,22 +630,6 @@ describe("venueIsEmpty", () => {
 
     it("is false once any field has content", () => {
         expect(venueIsEmpty({ ...emptyFormValues().venue, city: "Amsterdam" })).toBe(false);
-    });
-});
-
-describe("changedFields", () => {
-    it("returns only the keys whose values differ", () => {
-        expect(changedFields({ name: "a", description: null }, { name: "b", description: null })).toEqual(
-            { name: "b" },
-        );
-    });
-
-    it("returns an empty object when nothing changed", () => {
-        expect(changedFields({ name: "a" }, { name: "a" })).toEqual({});
-    });
-
-    it("treats an explicit null as a change", () => {
-        expect(changedFields({ description: "x" }, { description: null })).toEqual({ description: null });
     });
 });
 ```
@@ -750,25 +728,12 @@ export const toEventInput = (
     imageKey: resolved.imageKey,
     addressId: resolved.addressId,
 });
-
-/** Used on edit so a PATCH carries only what the user actually touched. */
-export const changedFields = <T extends Record<string, unknown>>(initial: T, current: T): Partial<T> => {
-    const changed: Partial<T> = {};
-
-    for (const key of Object.keys(current) as Array<keyof T>) {
-        if (current[key] !== initial[key]) {
-            changed[key] = current[key];
-        }
-    }
-
-    return changed;
-};
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm --filter web exec vitest run event-form`
-Expected: PASS — 11 tests
+Expected: PASS — 8 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1339,7 +1304,7 @@ export const resolveImageKey = async (
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `pnpm --filter web exec vitest run event-form`
-Expected: PASS — 13 tests
+Expected: PASS — 10 tests
 
 - [ ] **Step 5: Add the field to the form**
 
@@ -1544,7 +1509,7 @@ export const resolveAddressId = async (
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `pnpm --filter web exec vitest run event-form`
-Expected: PASS — 17 tests
+Expected: PASS — 14 tests
 
 - [ ] **Step 5: Add the venue fields to the form**
 
@@ -1824,7 +1789,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
    data arrives after render, so `notFound()` would replace an already-painted
    page with the 404 shell. The inline state keeps the heading and card and
    reports the actual API message.
-2. This sends the full input rather than only dirty fields. `changedFields` from Task 3 is available if you want to narrow the PATCH; with a 1:1 venue and a single editor there is no clobbering risk, so full-send is acceptable and simpler. Do not delete `changedFields` — it is covered by tests and will matter once concurrent editing exists.
+2. This sends the full input rather than only dirty fields. With a 1:1 venue and
+   a single editor there is no clobbering risk, so full-send is correct and
+   simpler. A dirty-diff belongs with concurrent editing, if that ever arrives.
 
 - [ ] **Step 2: Remove the dialog from the list page**
 
