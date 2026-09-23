@@ -100,8 +100,10 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                     (key) => value.venue[key].trim() === "",
                 );
 
+                // A plain string, not { form: "..." }: the subscriber below renders
+                // this value directly, and an object stringifies to "[object Object]".
                 return missing.length > 0
-                    ? { form: "Street, city and country are required when a venue is given." }
+                    ? "Street, city and country are required when a venue is given."
                     : undefined;
             },
         },
