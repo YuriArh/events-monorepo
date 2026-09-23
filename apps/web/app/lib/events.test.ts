@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { eventsApi } from "./events";
+import { addressesApi, ApiError, eventsApi, uploadImage } from "./events";
 
 const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -77,5 +77,81 @@ describe("error handling", () => {
         fetchMock.mockResolvedValue(new Response("boom", { status: 500 }));
 
         await expect(eventsApi.list()).rejects.toThrow("Request failed with status 500");
+    });
+
+    // Regression: the server's validation issues array was discarded, so a
+    // rejected form submission only ever showed the generic "Validation
+    // error" banner with no field-level detail.
+    it("throws an ApiError carrying the status and issues array", async () => {
+        const issues = [{ path: ["description"], message: "Too long" }];
+        fetchMock.mockResolvedValue(jsonResponse({ message: "Validation error", issues }, 400));
+
+        const failure = eventsApi.create({ name: "Retro" });
+
+        await expect(failure).rejects.toBeInstanceOf(ApiError);
+        await failure.catch((error: ApiError) => {
+            expect(error.status).toBe(400);
+            expect(error.issues).toEqual(issues);
+            expect(error.message).toBe("Validation error");
+        });
+    });
+
+    it("leaves issues undefined when the body doesn't carry any", async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ message: "Event not found" }, 404));
+
+        const failure = eventsApi.list();
+
+        await expect(failure).rejects.toBeInstanceOf(ApiError);
+        await failure.catch((error: ApiError) => {
+            expect(error.issues).toBeUndefined();
+        });
+    });
+});
+
+describe("eventsApi.get", () => {
+    it("requests a single event", async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ id: "1", name: "Retro" }));
+
+        await eventsApi.get("1");
+
+        expect(lastCall().url).toBe("http://api.test/api/events/1");
+    });
+});
+
+describe("uploadImage", () => {
+    it("posts multipart form data without a json content-type", async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ imageKey: "abc.png" }, 201));
+
+        const file = new File(["x"], "photo.png", { type: "image/png" });
+        await expect(uploadImage(file)).resolves.toEqual({ imageKey: "abc.png" });
+
+        const { url, init, headers } = lastCall();
+        expect(url).toBe("http://api.test/api/events/upload");
+        expect(init.method).toBe("POST");
+        expect(init.body).toBeInstanceOf(FormData);
+        // The browser sets the multipart boundary itself; forcing a content-type breaks it.
+        expect(headers["Content-Type"]).toBeUndefined();
+    });
+});
+
+describe("addressesApi", () => {
+    it("creates an address", async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ id: "a1" }, 201));
+
+        await addressesApi.create({ line1: "1 Civic Square", city: "Amsterdam", country: "NL" });
+
+        const { url, init } = lastCall();
+        expect(url).toBe("http://api.test/api/addresses");
+        expect(init.method).toBe("POST");
+    });
+
+    it("updates an address", async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ id: "a1" }));
+
+        await addressesApi.update("a1", { city: "Rotterdam" });
+
+        const { url, init } = lastCall();
+        expect(url).toBe("http://api.test/api/addresses/a1");
+        expect(init.method).toBe("PATCH");
     });
 });

@@ -1,5 +1,5 @@
 import type { Event } from "@repo/db";
-import type { z } from "zod";
+import type { z } from "@repo/contracts";
 
 import type {
   createEventSchema,

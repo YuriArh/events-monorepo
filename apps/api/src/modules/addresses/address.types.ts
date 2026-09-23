@@ -1,5 +1,5 @@
 import type { Address } from "@repo/db";
-import type { z } from "zod";
+import type { z } from "@repo/contracts";
 
 import type { createAddressSchema, updateAddressSchema } from "./address.schema.js";
 

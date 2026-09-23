@@ -1,6 +1,7 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, Loader2Icon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
@@ -17,19 +18,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
-import { type Event, eventKeys, eventsApi } from "@/lib/events";
+import { type EventRecord, eventKeys, eventsApi } from "@/lib/events";
 
 const spin = stylex.keyframes({
     from: { transform: "rotate(0deg)" },
@@ -177,14 +168,6 @@ const styles = stylex.create({
         },
         color: "#fff",
     },
-    field: {
-        display: "grid",
-        gap: "0.5rem",
-        paddingBlock: "1rem",
-    },
-    fieldError: {
-        color: colors.destructive,
-    },
     spinner: {
         animationName: spin,
         animationDuration: "1s",
@@ -201,10 +184,7 @@ const messageOf = (error: unknown, fallback: string) => (error instanceof Error 
 export default function HomePage() {
     const queryClient = useQueryClient();
 
-    const [isFormOpen, setIsFormOpen] = useState(false);
-    const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-    const [name, setName] = useState("");
-    const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
+    const [deletingEvent, setDeletingEvent] = useState<EventRecord | null>(null);
 
     const {
         data: events = [],
@@ -217,15 +197,6 @@ export default function HomePage() {
 
     const invalidateEvents = () => queryClient.invalidateQueries({ queryKey: eventKeys.all });
 
-    const saveMutation = useMutation({
-        mutationFn: (input: { name: string }) =>
-            editingEvent ? eventsApi.update(editingEvent.id, input) : eventsApi.create(input),
-        onSuccess: async () => {
-            await invalidateEvents();
-            setIsFormOpen(false);
-        },
-    });
-
     const deleteMutation = useMutation({
         mutationFn: (id: string) => eventsApi.remove(id),
         onSuccess: async () => {
@@ -233,28 +204,6 @@ export default function HomePage() {
             setDeletingEvent(null);
         },
     });
-
-    const openCreateForm = () => {
-        saveMutation.reset();
-        setEditingEvent(null);
-        setName("");
-        setIsFormOpen(true);
-    };
-
-    const openEditForm = (event: Event) => {
-        saveMutation.reset();
-        setEditingEvent(event);
-        setName(event.name);
-        setIsFormOpen(true);
-    };
-
-    const handleSubmit = (formEvent: FormEvent) => {
-        formEvent.preventDefault();
-
-        if (!name.trim()) return;
-
-        saveMutation.mutate({ name });
-    };
 
     const handleDelete = () => {
         if (deletingEvent) {
@@ -280,7 +229,7 @@ export default function HomePage() {
                                 : "Create and manage your events"}
                         </p>
                     </div>
-                    <Button onClick={openCreateForm}>
+                    <Button render={<Link href="/events/new" />}>
                         <PlusIcon />
                         New Event
                     </Button>
@@ -306,7 +255,7 @@ export default function HomePage() {
                                         Get started by creating your first event.
                                     </p>
                                 </div>
-                                <Button variant="outline" onClick={openCreateForm}>
+                                <Button variant="outline" render={<Link href="/events/new" />}>
                                     <PlusIcon />
                                     New Event
                                 </Button>
@@ -342,7 +291,7 @@ export default function HomePage() {
                                                         variant="ghost"
                                                         size="icon-sm"
                                                         aria-label={`Edit ${event.name}`}
-                                                        onClick={() => openEditForm(event)}>
+                                                        render={<Link href={`/events/${event.id}/edit`} />}>
                                                         <PencilIcon />
                                                     </Button>
                                                     <Button
@@ -363,47 +312,6 @@ export default function HomePage() {
                     </CardContent>
                 </Card>
             </main>
-
-            <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-                <DialogContent>
-                    <form onSubmit={handleSubmit}>
-                        <DialogHeader>
-                            <DialogTitle>{editingEvent ? "Edit event" : "New event"}</DialogTitle>
-                            <DialogDescription>
-                                {editingEvent
-                                    ? "Update the name of this event."
-                                    : "Give your event a name to add it to the list."}
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <div {...stylex.props(styles.field)}>
-                            <Label htmlFor="event-name">Name</Label>
-                            <Input
-                                id="event-name"
-                                value={name}
-                                onChange={(inputEvent) => setName(inputEvent.target.value)}
-                                placeholder="e.g. Team offsite"
-                                autoFocus
-                            />
-                            {saveMutation.error && (
-                                <p {...stylex.props(styles.fieldError, typography.sm)}>
-                                    {messageOf(saveMutation.error, "Failed to save event")}
-                                </p>
-                            )}
-                        </div>
-
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={saveMutation.isPending || !name.trim()}>
-                                {saveMutation.isPending && <Loader2Icon {...stylex.props(styles.spinner)} />}
-                                {editingEvent ? "Save" : "Create"}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
 
             <AlertDialog open={deletingEvent !== null} onOpenChange={(open) => !open && setDeletingEvent(null)}>
                 <AlertDialogContent>

@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
-import { ZodError } from "zod";
+import { ZodError } from "@repo/contracts";
 
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
 import { addressRoutes } from "./modules/addresses/address.routes.js";

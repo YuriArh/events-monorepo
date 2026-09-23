@@ -25,6 +25,7 @@ Before writing code, read the conventions that apply:
 # Testing convections
 
 - [docs/testing-conventions.md](docs/testing-conventions.md) — for detailed testing convections
+- [docs/superpowers/specs/](docs/superpowers/specs/) — design specs for larger features
 
 Two rules worth knowing up front: styling is StyleX (Tailwind was removed
 deliberately), and `apps/web/app/components/ui/**` is vendored registry code —

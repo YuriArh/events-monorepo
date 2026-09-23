@@ -9,6 +9,7 @@ apps/
   e2e/        Playwright suite covering both apps
 packages/
   db/         Prisma client + schema, exported as @repo/db
+  contracts/  Zod schemas shared by the API and web app
   ui/         Shared React components (not currently consumed by web)
   eslint-config/, typescript-config/   Shared config
 ```
@@ -25,6 +26,18 @@ browser → TanStack Query → app/lib/events.ts (fetch)
 
 The web app talks to the API over HTTP; it does not import `@repo/db`. Only
 `apps/api` touches the database.
+
+## Web app routes
+
+- `/` — the event list.
+- `/events/new` — create form.
+- `/events/[id]/edit` — edit form, including updating the linked venue
+  (`Address`) in place.
+
+Create and edit are full routes, not a dialog over the list page: the list's
+"New Event" and per-row edit controls are links (`next/link`), not buttons
+that open a modal. Only the delete confirmation is a dialog, since it doesn't
+need a form.
 
 ## API module layering
 
@@ -46,6 +59,36 @@ and it's why swapping the data layer stays a one-file change.
 `buildApp()` in `apps/api/src/app.ts` constructs the Fastify instance and is
 exported separately from `server.ts` (which listens), so tests can call
 `app.inject()` without binding a port.
+
+## Shared contracts
+
+Request validation lives in `@repo/contracts`, not in either app. For events,
+the package exports two schemas derived from one field shape: a wire schema
+(ISO date strings) that the browser form validates against, and a payload
+schema (coerced `Date` objects) that the API parses request bodies with.
+Addresses have no date fields, so they export only a single pair —
+`createAddressInput` / `updateAddressInput` — with no separate wire/payload
+split; there is nothing for a payload variant to coerce. The API's
+`*.schema.ts` files are thin re-exports, so the module layering is unchanged.
+
+The server remains authoritative. Client-side validation is a UX improvement,
+never the security boundary.
+
+`@repo/contracts` is consumed as raw TypeScript: its `package.json` `exports`
+field points at `src/index.ts` directly, with no build step. The compiled API
+therefore imports a `.ts` file at runtime, which relies on Node's built-in
+type-stripping (Node ≥ 24) rather than a compiled `dist/` output.
+
+`packages/contracts/src/index.ts` is deliberately a **single file with no
+relative imports** — this is enforced by a comment in the file, not just
+convention, and should stay that way. The API compiles it under NodeNext,
+which requires relative imports to carry a `.js` extension even though the
+source is `.ts`; the web app resolves it through Turbopack, which cannot
+resolve those `.js` specifiers back to the `.ts` files that actually exist.
+Splitting the module into several files satisfies one resolver at the expense
+of the other. Keeping everything in one file with nothing to resolve satisfies
+both. Don't split it up to "tidy up" the schemas without solving that
+resolution conflict first.
 
 ## Error handling
 
