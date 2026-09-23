@@ -41,7 +41,19 @@ async function pickDateTime(
     // Navigate forward until the target day is visible. The suite's target
     // dates are always ahead of "today", so forward-only navigation is
     // sufficient and avoids guessing how many months to advance.
-    const dayButton = popup.getByRole("button", { name: dayAccessibleName, exact: true });
+    //
+    // react-day-picker's default labelDayButton prepends "Today, " to the
+    // accessible name when the rendered day is the current date (see
+    // react-day-picker/dist/esm/labels/labelDayButton.js). Since these dates
+    // are hardcoded (not derived from `new Date()`, deliberately, so the
+    // suite doesn't depend on when it runs), whichever one happens to fall on
+    // "today" gains that prefix. Match it optionally, anchored at both ends
+    // so this still resolves to exactly one cell — never a substring match
+    // that could also hit an adjacent-month day or the month/year caption.
+    const escapedDayName = dayAccessibleName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const dayButton = popup.getByRole("button", {
+        name: new RegExp(`^(?:Today, )?${escapedDayName}$`),
+    });
     while (!(await dayButton.isVisible())) {
         await popup.getByRole("button", { name: "Go to the Next Month" }).click();
     }
