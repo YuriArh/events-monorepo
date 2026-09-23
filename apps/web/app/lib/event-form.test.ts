@@ -1,7 +1,7 @@
 import { createEventInput } from "@repo/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import type { EventRecord } from "./events";
+import { ApiError, type EventRecord } from "./events";
 import {
     emptyFormValues,
     formLevelError,
@@ -160,6 +160,67 @@ describe("resolveAddressId", () => {
 
         await expect(resolveAddressId(emptyFormValues(), "existing", calls)).resolves.toBeNull();
         expect(calls.update).not.toHaveBeenCalled();
+    });
+
+    // Regression: the address contract's issues key by "city", "line1", etc.,
+    // but the form only renders inline errors under "venue.city",
+    // "venue.line1", etc. Without this prefixing, a server rejection wrote to
+    // dead state nothing reads.
+    it("prefixes a create rejection's issue paths with 'venue'", async () => {
+        const values = {
+            ...emptyFormValues(),
+            venue: { ...emptyFormValues().venue, line1: "1 Civic Square", city: "Amsterdam", country: "NL" },
+        };
+        const calls = {
+            create: vi.fn().mockRejectedValue(
+                new ApiError("Validation error", 400, [
+                    { path: ["city"], message: "Too big: expected string to have <=255 characters" },
+                ]),
+            ),
+            update: vi.fn(),
+        };
+
+        const failure = resolveAddressId(values, null, calls);
+
+        await expect(failure).rejects.toBeInstanceOf(ApiError);
+        await failure.catch((error: ApiError) => {
+            expect(error.issues).toEqual([
+                { path: ["venue", "city"], message: "Too big: expected string to have <=255 characters" },
+            ]);
+        });
+    });
+
+    it("prefixes an update rejection's issue paths with 'venue'", async () => {
+        const values = {
+            ...emptyFormValues(),
+            venue: { ...emptyFormValues().venue, line1: "2 New Road", city: "Rotterdam", country: "NL" },
+        };
+        const calls = {
+            create: vi.fn(),
+            update: vi
+                .fn()
+                .mockRejectedValue(
+                    new ApiError("Validation error", 400, [{ path: ["line1"], message: "Too long" }]),
+                ),
+        };
+
+        const failure = resolveAddressId(values, "existing", calls);
+
+        await expect(failure).rejects.toBeInstanceOf(ApiError);
+        await failure.catch((error: ApiError) => {
+            expect(error.issues).toEqual([{ path: ["venue", "line1"], message: "Too long" }]);
+        });
+    });
+
+    it("rethrows a rejection with no issues unchanged", async () => {
+        const values = {
+            ...emptyFormValues(),
+            venue: { ...emptyFormValues().venue, line1: "1 Civic Square", city: "Amsterdam", country: "NL" },
+        };
+        const notFound = new ApiError("Address not found", 404);
+        const calls = { create: vi.fn().mockRejectedValue(notFound), update: vi.fn() };
+
+        await expect(resolveAddressId(values, null, calls)).rejects.toBe(notFound);
     });
 });
 

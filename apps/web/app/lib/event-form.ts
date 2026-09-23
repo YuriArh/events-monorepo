@@ -1,6 +1,6 @@
 import type { CreateAddressInput, CreateEventInput } from "@repo/contracts";
 
-import type { EventRecord } from "./events";
+import { ApiError, type EventRecord } from "./events";
 
 export type VenueValues = {
     label: string;
@@ -155,6 +155,13 @@ type AddressCalls = {
 /**
  * Step 2 of the submit sequence. Updating in place is safe because Event.addressId
  * is unique — an address belongs to exactly one event.
+ *
+ * The address contract's issues key by their own field names ("city", "line1",
+ * "country", ...), but the form renders venue inputs under "venue.city",
+ * "venue.line1", etc. A server rejection of the address call is re-thrown with
+ * its issue paths prefixed with "venue" so `issuesByField` (called by the
+ * form on the caught `ApiError`) produces keys the form actually renders
+ * inline, instead of writing to dead state nothing reads.
  */
 export const resolveAddressId = async (
     values: EventFormValues,
@@ -167,13 +174,25 @@ export const resolveAddressId = async (
 
     const input = toAddressInput(values.venue);
 
-    if (existingAddressId) {
-        await api.update(existingAddressId, input);
-        return existingAddressId;
-    }
+    try {
+        if (existingAddressId) {
+            await api.update(existingAddressId, input);
+            return existingAddressId;
+        }
 
-    const created = await api.create(input);
-    return created.id;
+        const created = await api.create(input);
+        return created.id;
+    } catch (error) {
+        if (error instanceof ApiError && error.issues) {
+            throw new ApiError(
+                error.message,
+                error.status,
+                error.issues.map((issue) => ({ ...issue, path: ["venue", ...issue.path] })),
+            );
+        }
+
+        throw error;
+    }
 };
 
 /** Shapes zod issues (from the client parse or a server 400) for field display. */

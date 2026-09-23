@@ -17,6 +17,40 @@ import { colors, radius, typography } from "@/styles/tokens.stylex";
 
 const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } });
 
+/** Field names this form renders an inline error under — kept in one place so
+ * the banner logic below can tell an issue with inline coverage from one that
+ * would otherwise be silent. */
+const VENUE_FIELDS = [
+    ["venue.label", "Venue name"],
+    ["venue.line1", "Street"],
+    ["venue.line2", "Street line 2"],
+    ["venue.city", "City"],
+    ["venue.region", "Region"],
+    ["venue.postalCode", "Postal code"],
+    ["venue.country", "Country"],
+] as const;
+
+const INLINE_FIELDS = new Set<string>([
+    "name",
+    "description",
+    "startsAt",
+    "endsAt",
+    ...VENUE_FIELDS.map(([name]) => name),
+]);
+
+/**
+ * Picks the banner message for a set of field errors. The banner is a last
+ * resort for issues nothing renders inline — if every issue already has an
+ * inline renderer, showing the same message a second time in the banner is
+ * just noise (see F2's "double-reported message").
+ */
+function bannerMessage(fields: Record<string, string>, fallback: string): string | null {
+    if (Object.keys(fields).length === 0) return fallback;
+
+    const uncovered = Object.entries(fields).find(([field]) => !INLINE_FIELDS.has(field));
+    return uncovered ? uncovered[1] : null;
+}
+
 const styles = stylex.create({
     form: { display: "flex", flexDirection: "column", gap: "1.5rem" },
     field: { display: "grid", gap: "0.5rem" },
@@ -100,9 +134,6 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
             onSubmit: ({ value }: { value: EventFormValues }) => formLevelError(value),
         },
         onSubmit: async ({ value }) => {
-            setSubmitError(null);
-            setFieldErrors({});
-
             // The contract is the authority; the field rules above are just fast feedback.
             const parsed = createEventInput.safeParse(
                 toEventInput(value, { imageKey: null, addressId: null }),
@@ -112,8 +143,9 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                 const fields = issuesByField(parsed.error.issues);
                 setFieldErrors(fields);
                 // Not every field has a dedicated inline renderer, so also surface
-                // the banner: a rejection must never be silent.
-                setSubmitError(Object.values(fields)[0] ?? "Please fix the errors below.");
+                // the banner — but only for issues nothing else shows, so a
+                // covered field's message isn't reported twice (F2).
+                setSubmitError(bannerMessage(fields, "Please fix the errors below."));
                 return;
             }
 
@@ -125,13 +157,12 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                 if (error instanceof ApiError && error.issues) {
                     const fields = issuesByField(error.issues);
                     setFieldErrors(fields);
-                    // Some server-rejected paths (e.g. the address contract's
-                    // "city", "line1") don't line up with any field this form
-                    // renders inline (which uses "venue.city", "venue.line1", ...),
-                    // so lead with the specific issue message rather than the
-                    // generic "Validation error" — a rejection must never be silent
-                    // *or* vague.
-                    setSubmitError(Object.values(fields)[0] ?? error.message);
+                    // `resolveAddressId` prefixes address-contract issue paths
+                    // ("city", "line1", ...) with "venue" before this catch ever
+                    // sees them, so `fields` keys line up with the inline
+                    // renderers below. The banner is then only for whatever, if
+                    // anything, still has no inline renderer.
+                    setSubmitError(bannerMessage(fields, error.message));
                 } else {
                     setSubmitError(error instanceof Error ? error.message : "Something went wrong");
                 }
@@ -144,6 +175,13 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
             {...stylex.props(styles.form)}
             onSubmit={(event) => {
                 event.preventDefault();
+                // Cleared here, at the start of every submit attempt, rather than
+                // inside the `onSubmit` handler above: TanStack Form skips that
+                // handler entirely when `validators.onSubmit` (the date-range /
+                // venue rule) blocks the submission, which would otherwise leave
+                // a stale banner and stale field errors on screen (F3).
+                setSubmitError(null);
+                setFieldErrors({});
                 form.handleSubmit();
             }}>
             {submitError && <div {...stylex.props(styles.banner, typography.sm)}>{submitError}</div>}
@@ -268,17 +306,7 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                     </p>
                 </div>
 
-                {(
-                    [
-                        ["venue.label", "Venue name"],
-                        ["venue.line1", "Street"],
-                        ["venue.line2", "Street line 2"],
-                        ["venue.city", "City"],
-                        ["venue.region", "Region"],
-                        ["venue.postalCode", "Postal code"],
-                        ["venue.country", "Country"],
-                    ] as const
-                ).map(([name, label]) => (
+                {VENUE_FIELDS.map(([name, label]) => (
                     <form.Field key={name} name={name}>
                         {(field) => (
                             <div {...stylex.props(styles.field)}>

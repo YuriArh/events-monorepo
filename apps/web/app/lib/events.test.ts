@@ -101,6 +101,7 @@ describe("error handling", () => {
 
         const failure = eventsApi.list();
 
+        await expect(failure).rejects.toBeInstanceOf(ApiError);
         await failure.catch((error: ApiError) => {
             expect(error.issues).toBeUndefined();
         });
