@@ -33,6 +33,15 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
 
+    // Capture the address id created for this event now, while the event
+    // still exists: the "delete" step below removes the event through the
+    // UI, and deleting an Event does not delete its Address (the FK nulls
+    // the other way around). Editing the name doesn't change the venue, so
+    // this id stays valid through the rest of the test.
+    const createdEvents: Array<{ id: string; name: string; addressId: string | null }> =
+        await (await request.get(`${API_URL}/api/events`)).json();
+    const addressId = createdEvents.find((candidate) => candidate.name === name)?.addressId ?? null;
+
     await test.step("edit", async () => {
         // Same as "New Event" above: the row's edit control is a navigation link.
         await page.getByRole("link", { name: `Edit ${name}` }).click();
@@ -52,11 +61,28 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
         await expect(page.getByRole("cell", { name: renamed, exact: true })).toBeHidden();
     });
 
-    // Clean up anything the run left behind in the shared dev database.
+    // The UI delete above only removes the Event row, leaving this test's
+    // Address orphaned. Remove it via the id captured right after creation,
+    // so this cleanup never touches a developer's own address data.
+    if (addressId !== null) {
+        await request.delete(`${API_URL}/api/addresses/${addressId}`);
+    }
+
+    // Clean up anything a previous, incomplete run left behind in the shared
+    // dev database (e.g. a run that failed before reaching the "delete" step
+    // above). Scoped to "E2E event*" events so it never deletes a developer's
+    // own data.
     const response = await request.get(`${API_URL}/api/events`);
-    const events: Array<{ id: string; name: string }> = await response.json();
-    for (const event of events.filter((candidate) => candidate.name.startsWith("E2E event"))) {
+    const events: Array<{ id: string; name: string; addressId: string | null }> =
+        await response.json();
+    const leftoverEvents = events.filter((candidate) => candidate.name.startsWith("E2E event"));
+    for (const event of leftoverEvents) {
         await request.delete(`${API_URL}/api/events/${event.id}`);
+    }
+    for (const leftoverAddressId of leftoverEvents
+        .map((event) => event.addressId)
+        .filter((candidate): candidate is string => candidate !== null)) {
+        await request.delete(`${API_URL}/api/addresses/${leftoverAddressId}`);
     }
 });
 
