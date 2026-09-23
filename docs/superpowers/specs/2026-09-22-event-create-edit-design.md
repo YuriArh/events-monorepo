@@ -22,7 +22,7 @@ This spec covers creating and editing events from the web app.
 | Venue relation | Optional 1:1 (`Event.addressId` is `@unique`) |
 | Image upload timing | On submit, not on file select |
 | Validation | Shared Zod contract package |
-| Date control | Registry Date Picker + Calendar |
+| Date control | ~~Registry Date Picker + Calendar~~ — see **Deviations from this spec** |
 | Form library | TanStack Form |
 
 ## Architecture
@@ -67,8 +67,10 @@ initial values and which mutation runs. Both redirect to `/` on success.
 
 ### New vendored components
 
-`date-picker`, `calendar`, `textarea` from the stylexui registry, added with the
-shadcn CLI as described in `docs/css-conventions.md`.
+~~`date-picker`, `calendar`, `textarea` from the stylexui registry, added with the
+shadcn CLI as described in `docs/css-conventions.md`.~~ — see **Deviations from
+this spec**: the registry ships no `date-picker`, so only `calendar` and
+`textarea` were vendored; the date-time control is hand-composed.
 
 ## The form
 
@@ -125,8 +127,10 @@ schema is a UX improvement, not the security boundary.
 
 ### Edit
 
-Prefills from `GET /api/events/:id` and PATCHes only dirty fields, which is the
-main thing the form library buys us.
+Prefills from `GET /api/events/:id`. ~~PATCHes only dirty fields, which is the
+main thing the form library buys us.~~ — see **Deviations from this spec**: the
+form always sends the full input; dirty-field diffing was cut before
+execution.
 
 ## Data flow
 
@@ -138,14 +142,24 @@ keys.
 ## Error handling
 
 - Server 400 `issues[]` map onto fields by `path`
-- 404 on the edit route renders `notFound()`
+- ~~404 on the edit route renders `notFound()`~~ — see **Deviations from this
+  spec**: it renders an inline error instead.
 - Network and unknown failures show a form-level banner
 
 ### Known limitation: partial failure
 
-The submit sequence is three sequential HTTP calls with no transaction across
-them. If the image uploads and the address is created but the event write fails,
-an orphaned image and an orphaned address are left behind.
+The submit sequence is up to three sequential HTTP calls with no transaction
+across them.
+
+On **create**: if the image uploads and the address is created but the event
+write fails, an orphaned image and an orphaned address are left behind.
+
+On **edit**: `resolveAddressId` PATCHes the *existing* Address in place before
+`eventsApi.update` runs. If the event write then fails, the user's venue edit
+has already been committed — this is destructive in-place mutation of
+existing data, not just a leftover row like the create case. There is no undo;
+the only trace is the form's own error banner telling the user the save
+failed, with no indication that the venue portion actually went through.
 
 For this spec that is **accepted**: the error surfaces clearly and the form
 keeps its state so the user can retry.
@@ -158,6 +172,30 @@ keeps its state so the user can retry.
    address so the server writes both in one transaction, or a periodic sweep
    deleting addresses with no event.
 3. Detaching a venue also orphans its address row; the same sweep covers it.
+4. The edit-time Address PATCH-before-event-write ordering above: making the
+   whole submit sequence transactional (or reordering so the event write is
+   attempted first) would remove the risk of a committed venue edit alongside
+   a failed event save.
+
+## Deviations from this spec
+
+Decided and reviewed during execution; recorded here because the sections
+above still describe the original intent, not what shipped.
+
+- **PATCH sends the full input, not just dirty fields.** Diffing was cut
+  before execution: the venue relation is 1:1, there is a single editor, and
+  there is no clobbering risk to guard against, so the extra bookkeeping
+  wasn't worth it.
+- **The edit route's 404 renders inline, not via `notFound()`.** The edit page
+  is a client component whose data (`GET /api/events/:id`) arrives after the
+  initial render — the shell has already painted by the time the fetch
+  resolves. Calling `notFound()` at that point would replace an
+  already-visible page rather than prevent one from rendering, which is a
+  worse experience than an inline error inside the existing shell.
+- **No `date-picker` was vendored; there is no registry date picker to
+  vendor.** The stylexui registry does not ship one. The date-time control is
+  hand-composed from the vendored `Popover` and `Calendar` plus a plain time
+  `<input>`, wired together in `apps/web/app/components/date-time-picker.tsx`.
 
 ## Testing
 

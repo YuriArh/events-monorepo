@@ -62,14 +62,22 @@ exported separately from `server.ts` (which listens), so tests can call
 
 ## Shared contracts
 
-Request validation lives in `@repo/contracts`, not in either app. The package
-exports two schemas per resource, derived from one field shape: a wire schema
-(ISO date strings) that the browser form validates against, and a payload schema
-(coerced `Date` objects) that the API parses request bodies with. The API's
+Request validation lives in `@repo/contracts`, not in either app. For events,
+the package exports two schemas derived from one field shape: a wire schema
+(ISO date strings) that the browser form validates against, and a payload
+schema (coerced `Date` objects) that the API parses request bodies with.
+Addresses have no date fields, so they export only a single pair —
+`createAddressInput` / `updateAddressInput` — with no separate wire/payload
+split; there is nothing for a payload variant to coerce. The API's
 `*.schema.ts` files are thin re-exports, so the module layering is unchanged.
 
 The server remains authoritative. Client-side validation is a UX improvement,
 never the security boundary.
+
+`@repo/contracts` is consumed as raw TypeScript: its `package.json` `exports`
+field points at `src/index.ts` directly, with no build step. The compiled API
+therefore imports a `.ts` file at runtime, which relies on Node's built-in
+type-stripping (Node ≥ 24) rather than a compiled `dist/` output.
 
 `packages/contracts/src/index.ts` is deliberately a **single file with no
 relative imports** — this is enforced by a comment in the file, not just
