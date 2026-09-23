@@ -82,6 +82,14 @@ async function pickDateTime(
     const popupId = await trigger.getAttribute("aria-controls");
     if (!popupId) throw new Error(`${fieldLabel} trigger has no aria-controls`);
     const popup = page.locator(`[id="${popupId}"]`);
+    const nextMonthButton = popup.getByRole("button", { name: "Go to the Next Month" });
+
+    // `isVisible()` doesn't auto-wait, so without this the very first check in
+    // the loop below can run before the popover has painted, returning `false`
+    // and spending one spurious click before the target month is ever
+    // examined. Awaiting the nav control (present as soon as the popover
+    // renders) guarantees the grid is there before the loop starts.
+    await nextMonthButton.waitFor();
 
     // Navigate forward until the target day is visible. The suite's target
     // dates are derived from `new Date()` and are always ahead of "today", so
@@ -89,15 +97,15 @@ async function pickDateTime(
     // months to advance.
     //
     // react-day-picker's default labelDayButton prepends "Today, " to the
-    // accessible name when the rendered day is the current date (see
-    // react-day-picker/dist/esm/labels/labelDayButton.js). A derived date will
-    // rarely land on "today", but matching the prefix optionally costs
-    // nothing, anchored at both ends so this still resolves to exactly one
-    // cell — never a substring match that could also hit an adjacent-month
-    // day or the month/year caption.
+    // accessible name when the rendered day is the current date, and appends
+    // ", selected" once that day has been picked (see
+    // react-day-picker/dist/esm/labels/labelDayButton.js). Each picker opens
+    // unselected today, but matching both optionally costs nothing and keeps
+    // this resolving to exactly one cell — never a substring match that could
+    // also hit an adjacent-month day or the month/year caption.
     const escapedDayName = dayAccessibleName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const dayButton = popup.getByRole("button", {
-        name: new RegExp(`^(?:Today, )?${escapedDayName}$`),
+        name: new RegExp(`^(?:Today, )?${escapedDayName}(?:, selected)?$`),
     });
 
     // Bounded: 24 months (2 years) is far more than this suite ever needs to
@@ -111,7 +119,7 @@ async function pickDateTime(
                 `${fieldLabel} date picker: could not find "${dayAccessibleName}" within ${MAX_MONTHS} months of navigation`,
             );
         }
-        await popup.getByRole("button", { name: "Go to the Next Month" }).click();
+        await nextMonthButton.click();
         months += 1;
     }
     await dayButton.click();
