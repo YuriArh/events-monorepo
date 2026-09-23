@@ -68,10 +68,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
             return eventsApi.update(id, input);
         },
         onSuccess: async () => {
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: eventKeys.all }),
-                queryClient.invalidateQueries({ queryKey: eventKeys.detail(id) }),
-            ]);
+            // eventKeys.all (["events"]) is a prefix of eventKeys.detail(id)
+            // (["events", id]), so invalidating "all" already invalidates this
+            // detail query too.
+            await queryClient.invalidateQueries({ queryKey: eventKeys.all });
             router.push("/");
         },
     });
