@@ -69,9 +69,12 @@ running locally.
   in the Address→Event direction, nulling `Event.addressId` when an Address is
   removed; it does nothing when the Event itself is removed). The events spec
   captures the address id right after creation and deletes it via the API,
-  plus a startup sweep for anything a previous, interrupted run left behind.
-  Earlier runs leaked orphaned Address rows into the shared dev database
-  before this was fixed.
+  plus a `beforeAll` sweep for anything a previous, interrupted run left
+  behind. The sweep runs before any test in the file, not just at the end of
+  the first one — that way a run that itself fails early still leaves the
+  database clean for the next run, rather than depending on some later run
+  reaching its own end. Earlier runs leaked orphaned Address rows into the
+  shared dev database before this was fixed.
 - Keep it to a handful of high-value flows. E2E is the slowest, flakiest layer;
   push detail down into integration tests.
 

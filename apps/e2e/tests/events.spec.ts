@@ -2,12 +2,57 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 
 const API_URL = "http://localhost:4000";
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "../fixtures/event.png");
 
 /** Names are unique per run so specs don't collide with existing dev data. */
 const uniqueName = (label: string) => `${label} ${Date.now()}`;
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+/** "1st", "2nd", "3rd", "4th", ..., "21st", "22nd", "23rd", ... */
+function ordinal(day: number): string {
+    if (day % 10 === 1 && day % 100 !== 11) return `${day}st`;
+    if (day % 10 === 2 && day % 100 !== 12) return `${day}nd`;
+    if (day % 10 === 3 && day % 100 !== 13) return `${day}rd`;
+    return `${day}th`;
+}
+
+/**
+ * Matches react-day-picker's default `labelDayButton` output (the day
+ * button's accessible name), which formats with date-fns' "PPPP" token —
+ * `EEEE, MMMM do, yyyy` in the en-US locale, e.g. "Thursday, October 1st,
+ * 2026". See `labelDayButton.js` and date-fns' `en-US/_lib/formatLong`.
+ * Computed from local date parts (getDay/getMonth/getDate), matching how the
+ * calendar renders days.
+ */
+function dayAccessibleNameFor(date: Date): string {
+    return `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${ordinal(date.getDate())}, ${date.getFullYear()}`;
+}
+
+/** Midnight local time, `days` days from today — used so target dates never expire. */
+function daysFromNow(days: number): Date {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + days);
+    return date;
+}
 
 /**
  * The date-time picker's trigger has the accessible name given to the field
@@ -39,23 +84,35 @@ async function pickDateTime(
     const popup = page.locator(`[id="${popupId}"]`);
 
     // Navigate forward until the target day is visible. The suite's target
-    // dates are always ahead of "today", so forward-only navigation is
-    // sufficient and avoids guessing how many months to advance.
+    // dates are derived from `new Date()` and are always ahead of "today", so
+    // forward-only navigation is sufficient and avoids guessing how many
+    // months to advance.
     //
     // react-day-picker's default labelDayButton prepends "Today, " to the
     // accessible name when the rendered day is the current date (see
-    // react-day-picker/dist/esm/labels/labelDayButton.js). Since these dates
-    // are hardcoded (not derived from `new Date()`, deliberately, so the
-    // suite doesn't depend on when it runs), whichever one happens to fall on
-    // "today" gains that prefix. Match it optionally, anchored at both ends
-    // so this still resolves to exactly one cell — never a substring match
-    // that could also hit an adjacent-month day or the month/year caption.
+    // react-day-picker/dist/esm/labels/labelDayButton.js). A derived date will
+    // rarely land on "today", but matching the prefix optionally costs
+    // nothing, anchored at both ends so this still resolves to exactly one
+    // cell — never a substring match that could also hit an adjacent-month
+    // day or the month/year caption.
     const escapedDayName = dayAccessibleName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const dayButton = popup.getByRole("button", {
         name: new RegExp(`^(?:Today, )?${escapedDayName}$`),
     });
+
+    // Bounded: 24 months (2 years) is far more than this suite ever needs to
+    // navigate, and a bounded loop that throws a named error beats a
+    // 30s-timeout infinite loop with no indication of the real cause.
+    const MAX_MONTHS = 24;
+    let months = 0;
     while (!(await dayButton.isVisible())) {
+        if (months >= MAX_MONTHS) {
+            throw new Error(
+                `${fieldLabel} date picker: could not find "${dayAccessibleName}" within ${MAX_MONTHS} months of navigation`,
+            );
+        }
         await popup.getByRole("button", { name: "Go to the Next Month" }).click();
+        months += 1;
     }
     await dayButton.click();
 
@@ -63,9 +120,46 @@ async function pickDateTime(
     await page.getByLabel(`${fieldLabel} time`, { exact: true }).fill(time);
 }
 
+/**
+ * Removes anything a previous, interrupted run left behind in the shared dev
+ * database (e.g. a run that failed before reaching its own "delete" step).
+ * Scoped to "E2E event*" events so it never touches a developer's own data.
+ *
+ * Run from `beforeAll` rather than at the end of the first test: sweeping at
+ * the end only cleans up *after* a full run completes, so an interrupted
+ * run's leftovers would otherwise survive until some later run reaches its
+ * own end — and never get cleaned at all if that run also fails early.
+ * Running the sweep before anything else guarantees every run starts clean,
+ * regardless of how the previous one ended.
+ */
+async function sweepLeftoverEvents(request: APIRequestContext) {
+    const response = await request.get(`${API_URL}/api/events`);
+    const events: Array<{ id: string; name: string; addressId: string | null }> = await response.json();
+    const leftoverEvents = events.filter((candidate) => candidate.name.startsWith("E2E event"));
+
+    for (const event of leftoverEvents) {
+        await request.delete(`${API_URL}/api/events/${event.id}`);
+    }
+    for (const leftoverAddressId of leftoverEvents
+        .map((event) => event.addressId)
+        .filter((candidate): candidate is string => candidate !== null)) {
+        await request.delete(`${API_URL}/api/addresses/${leftoverAddressId}`);
+    }
+}
+
+test.beforeAll(async ({ request }) => {
+    await sweepLeftoverEvents(request);
+});
+
 test("creates an event with every field, then edits and deletes it", async ({ page, request }) => {
     const name = uniqueName("E2E event");
     const renamed = `${name} (edited)`;
+
+    // Derived from "today" (rather than hardcoded) so these never drift into
+    // the past and turn month navigation into an infinite loop. Kept distinct
+    // and ordered: the API enforces `endsAt > startsAt`.
+    const startsDay = daysFromNow(30);
+    const endsDay = daysFromNow(37);
 
     await page.goto("/");
     // "New Event" navigates (an <a>, styled as a button), so its accessible role is "link".
@@ -74,8 +168,8 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
 
     await page.getByLabel("Name", { exact: true }).fill(name);
     await page.getByLabel("Description").fill("Created by the e2e suite");
-    await pickDateTime(page, "Starts", "Thursday, October 1st, 2026", "18:00");
-    await pickDateTime(page, "Ends", "Thursday, October 8th, 2026", "21:00");
+    await pickDateTime(page, "Starts", dayAccessibleNameFor(startsDay), "18:00");
+    await pickDateTime(page, "Ends", dayAccessibleNameFor(endsDay), "21:00");
     await page.getByLabel("Image").setInputFiles(FIXTURE);
 
     await page.getByLabel("Street", { exact: true }).fill("1 Civic Square");
@@ -120,23 +214,6 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
     // so this cleanup never touches a developer's own address data.
     if (addressId !== null) {
         await request.delete(`${API_URL}/api/addresses/${addressId}`);
-    }
-
-    // Clean up anything a previous, incomplete run left behind in the shared
-    // dev database (e.g. a run that failed before reaching the "delete" step
-    // above). Scoped to "E2E event*" events so it never deletes a developer's
-    // own data.
-    const response = await request.get(`${API_URL}/api/events`);
-    const events: Array<{ id: string; name: string; addressId: string | null }> =
-        await response.json();
-    const leftoverEvents = events.filter((candidate) => candidate.name.startsWith("E2E event"));
-    for (const event of leftoverEvents) {
-        await request.delete(`${API_URL}/api/events/${event.id}`);
-    }
-    for (const leftoverAddressId of leftoverEvents
-        .map((event) => event.addressId)
-        .filter((candidate): candidate is string => candidate !== null)) {
-        await request.delete(`${API_URL}/api/addresses/${leftoverAddressId}`);
     }
 });
 
