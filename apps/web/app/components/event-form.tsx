@@ -143,6 +143,13 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
             <form.Field
                 name="name"
                 validators={{
+                    // onMount gives an untouched, empty form a mount-time error so
+                    // canSubmit reflects validity from the start (tanstack/form-core
+                    // otherwise reports canSubmit: true until the first submit
+                    // attempt or a touch). onChange keeps that feedback live as the
+                    // user types.
+                    onMount: ({ value }: { value: string }) =>
+                        value.trim() === "" ? "Name is required" : undefined,
                     onChange: ({ value }: { value: string }) =>
                         value.trim() === "" ? "Name is required" : undefined,
                 }}>
@@ -156,11 +163,16 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                             onChange={(event) => field.handleChange(event.target.value)}
                             placeholder="e.g. Team offsite"
                         />
-                        {(field.state.meta.errors.length > 0 || fieldErrors.name) && (
-                            <p {...stylex.props(styles.error, typography.sm)}>
-                                {String(field.state.meta.errors[0] ?? fieldErrors.name)}
-                            </p>
-                        )}
+                        {/* Only show the error once the field has been touched: the
+                            onMount validator exists so canSubmit is accurate on an
+                            untouched, empty form, not to scold the user before they've
+                            typed anything. */}
+                        {field.state.meta.isTouched &&
+                            (field.state.meta.errors.length > 0 || fieldErrors.name) && (
+                                <p {...stylex.props(styles.error, typography.sm)}>
+                                    {String(field.state.meta.errors[0] ?? fieldErrors.name)}
+                                </p>
+                            )}
                     </div>
                 )}
             </form.Field>
