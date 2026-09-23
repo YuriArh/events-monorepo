@@ -47,6 +47,8 @@ Model types come from Prisma via `@repo/db`; re-export rather than restate them.
   `babel.config.json` for StyleX's module resolution — change both together.
 - Prefer inferred return types; annotate only when inference is wrong or the
   signature is the contract.
+- Request/response schemas belong in `@repo/contracts`, never duplicated per app.
+  Derive types with `z.infer` rather than hand-writing them.
 
 ## Commands
 

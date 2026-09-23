@@ -73,6 +73,26 @@ regeneration. Customise from the outside instead — every component accepts a
 
 Registry files import tokens from `@/styles/tokens.stylex`, so that path must
 keep resolving; the babel `aliases` option mirrors the tsconfig `@/*` mapping.
+There is exactly one real tokens file, `apps/web/app/styles/tokens.stylex.ts`.
+
+**Pulling a new component writes a stray duplicate.** The `shadcn` CLI maps
+the registry's `styles/tokens.stylex.ts` path to an alias that resolves inside
+`app/components/ui/`, not `app/styles/`, so nearly every `add` also drops a
+byte-identical `app/components/ui/tokens.stylex.ts`. Nothing imports it — real
+imports all use `@/styles/tokens.stylex`, which resolves to the file in
+`app/styles/` — but delete the duplicate before committing anyway. If a future
+edit ever needs to touch tokens, point it at `app/styles/tokens.stylex.ts`;
+the copy under `ui/` is dead vendoring noise, not an alternate source of truth.
+
+### No vendored date picker
+
+The registry's `date-picker` entry (`https://stylexui.dev/r/date-picker.json`)
+lists real dependencies (`calendar.tsx`, `button.tsx`, tokens, utils) but its
+`files` array never includes a `date-picker.tsx` — pulling it creates nothing.
+Ours is hand-composed instead, from the vendored `Popover` + `Calendar` plus a
+plain time `Input`, in `apps/web/app/components/date-time-picker.tsx`. That
+file is regular app code, not registry output — unlike `app/components/ui/**`,
+which stays vendored and is regenerated rather than hand-edited.
 
 ## Writing styles
 
