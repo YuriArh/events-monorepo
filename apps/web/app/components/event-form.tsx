@@ -6,6 +6,7 @@ import { useForm } from "@tanstack/react-form";
 import { Loader2Icon } from "lucide-react";
 import { createEventInput } from "@repo/contracts";
 
+import { DateTimePicker } from "@/components/date-time-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,12 +198,11 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                     {(field) => (
                         <div {...stylex.props(styles.field)}>
                             <Label htmlFor="startsAt">Starts</Label>
-                            <Input
+                            <DateTimePicker
                                 id="startsAt"
-                                type="datetime-local"
-                                value={toLocalInput(field.state.value)}
-                                onBlur={field.handleBlur}
-                                onChange={(event) => field.handleChange(fromLocalInput(event.target.value))}
+                                label="Starts"
+                                value={field.state.value}
+                                onChange={(value) => field.handleChange(value)}
                             />
                         </div>
                     )}
@@ -212,12 +212,11 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                     {(field) => (
                         <div {...stylex.props(styles.field)}>
                             <Label htmlFor="endsAt">Ends</Label>
-                            <Input
+                            <DateTimePicker
                                 id="endsAt"
-                                type="datetime-local"
-                                value={toLocalInput(field.state.value)}
-                                onBlur={field.handleBlur}
-                                onChange={(event) => field.handleChange(fromLocalInput(event.target.value))}
+                                label="Ends"
+                                value={field.state.value}
+                                onChange={(value) => field.handleChange(value)}
                             />
                         </div>
                     )}
@@ -303,13 +302,3 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
         </form>
     );
 }
-
-/** `datetime-local` speaks "YYYY-MM-DDTHH:mm" in local time, with no offset. */
-const toLocalInput = (value: Date | null) => {
-    if (!value) return "";
-
-    const pad = (part: number) => String(part).padStart(2, "0");
-    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
-};
-
-const fromLocalInput = (value: string) => (value === "" ? null : new Date(value));

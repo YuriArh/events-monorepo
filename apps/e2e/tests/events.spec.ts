@@ -9,6 +9,48 @@ const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "../fixt
 /** Names are unique per run so specs don't collide with existing dev data. */
 const uniqueName = (label: string) => `${label} ${Date.now()}`;
 
+/**
+ * The date-time picker's trigger has the accessible name given to the field
+ * (via <Label htmlFor>, which points at the trigger button's id). Opening it
+ * reveals a calendar popover; picking a day closes nothing automatically, so
+ * Escape dismisses it once a day is chosen. The day buttons' accessible names
+ * are full dates ("Thursday, October 1st, 2026"), which is deterministic and
+ * never ambiguous within a single month grid — unlike a bare day number,
+ * which can appear twice (this month's tail + next month's lead-in days).
+ *
+ * base-ui's popover content fades out (opacity/transform) rather than
+ * unmounting immediately on close, so a closed-but-still-fading Starts
+ * popover and an open Ends popover can both be present in the DOM at once —
+ * a plain page-wide getByRole for the "next month" button then hits a
+ * strict-mode ambiguity. The trigger's `aria-controls` names its own popup's
+ * id, so scoping every lookup to that id targets only this field's popover.
+ */
+async function pickDateTime(
+    page: import("@playwright/test").Page,
+    fieldLabel: string,
+    dayAccessibleName: string,
+    time: string,
+) {
+    const trigger = page.getByLabel(fieldLabel, { exact: true });
+    await trigger.click();
+
+    const popupId = await trigger.getAttribute("aria-controls");
+    if (!popupId) throw new Error(`${fieldLabel} trigger has no aria-controls`);
+    const popup = page.locator(`[id="${popupId}"]`);
+
+    // Navigate forward until the target day is visible. The suite's target
+    // dates are always ahead of "today", so forward-only navigation is
+    // sufficient and avoids guessing how many months to advance.
+    const dayButton = popup.getByRole("button", { name: dayAccessibleName, exact: true });
+    while (!(await dayButton.isVisible())) {
+        await popup.getByRole("button", { name: "Go to the Next Month" }).click();
+    }
+    await dayButton.click();
+
+    await page.keyboard.press("Escape");
+    await page.getByLabel(`${fieldLabel} time`, { exact: true }).fill(time);
+}
+
 test("creates an event with every field, then edits and deletes it", async ({ page, request }) => {
     const name = uniqueName("E2E event");
     const renamed = `${name} (edited)`;
@@ -20,8 +62,8 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
 
     await page.getByLabel("Name", { exact: true }).fill(name);
     await page.getByLabel("Description").fill("Created by the e2e suite");
-    await page.getByLabel("Starts").fill("2026-10-01T18:00");
-    await page.getByLabel("Ends").fill("2026-10-01T21:00");
+    await pickDateTime(page, "Starts", "Thursday, October 1st, 2026", "18:00");
+    await pickDateTime(page, "Ends", "Thursday, October 8th, 2026", "21:00");
     await page.getByLabel("Image").setInputFiles(FIXTURE);
 
     await page.getByLabel("Street", { exact: true }).fill("1 Civic Square");
