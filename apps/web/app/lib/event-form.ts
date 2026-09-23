@@ -72,6 +72,37 @@ export const venueIsEmpty = (venue: VenueValues) =>
     Object.values(venue).every((value) => value.trim() === "");
 
 /**
+ * Form-level (cross-field) validation, run from `EventForm`'s `onSubmit`
+ * validator. Pulled out here so it's covered by a plain unit test rather than
+ * only exercised through the rendered form.
+ *
+ * Returns a plain string, not `{ form: "..." }`: the subscriber in
+ * `event-form.tsx` renders the value directly, and an object stringifies to
+ * "[object Object]".
+ */
+export const formLevelError = (value: Pick<EventFormValues, "venue" | "startsAt" | "endsAt">): string | undefined => {
+    if (!venueIsEmpty(value.venue)) {
+        const missing = (["line1", "city", "country"] as const).filter(
+            (key) => value.venue[key].trim() === "",
+        );
+
+        if (missing.length > 0) {
+            return "Street, city and country are required when a venue is given.";
+        }
+    }
+
+    // Client-side mirror of the server's `endsAt > startsAt` rule (UX only —
+    // the server remains authoritative). Catching it here avoids uploading an
+    // image / creating an address for a submission the server would reject
+    // anyway.
+    if (value.startsAt && value.endsAt && value.endsAt <= value.startsAt) {
+        return "Ends must be after starts.";
+    }
+
+    return undefined;
+};
+
+/**
  * `imageKey` and `addressId` are resolved by the submit sequence before this
  * runs, which is why they are passed in rather than read off the form.
  */

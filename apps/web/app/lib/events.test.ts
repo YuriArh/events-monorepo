@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { addressesApi, eventsApi, uploadImage } from "./events";
+import { addressesApi, ApiError, eventsApi, uploadImage } from "./events";
 
 const jsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -77,6 +77,33 @@ describe("error handling", () => {
         fetchMock.mockResolvedValue(new Response("boom", { status: 500 }));
 
         await expect(eventsApi.list()).rejects.toThrow("Request failed with status 500");
+    });
+
+    // Regression: the server's validation issues array was discarded, so a
+    // rejected form submission only ever showed the generic "Validation
+    // error" banner with no field-level detail.
+    it("throws an ApiError carrying the status and issues array", async () => {
+        const issues = [{ path: ["description"], message: "Too long" }];
+        fetchMock.mockResolvedValue(jsonResponse({ message: "Validation error", issues }, 400));
+
+        const failure = eventsApi.create({ name: "Retro" });
+
+        await expect(failure).rejects.toBeInstanceOf(ApiError);
+        await failure.catch((error: ApiError) => {
+            expect(error.status).toBe(400);
+            expect(error.issues).toEqual(issues);
+            expect(error.message).toBe("Validation error");
+        });
+    });
+
+    it("leaves issues undefined when the body doesn't carry any", async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ message: "Event not found" }, 404));
+
+        const failure = eventsApi.list();
+
+        await failure.catch((error: ApiError) => {
+            expect(error.issues).toBeUndefined();
+        });
     });
 });
 

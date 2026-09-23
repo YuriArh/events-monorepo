@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { EventRecord } from "./events";
 import {
     emptyFormValues,
+    formLevelError,
     issuesByField,
     resolveAddressId,
     resolveImageKey,
@@ -159,6 +160,57 @@ describe("resolveAddressId", () => {
 
         await expect(resolveAddressId(emptyFormValues(), "existing", calls)).resolves.toBeNull();
         expect(calls.update).not.toHaveBeenCalled();
+    });
+});
+
+describe("formLevelError", () => {
+    it("is undefined for an empty venue and no dates", () => {
+        expect(formLevelError(emptyFormValues())).toBeUndefined();
+    });
+
+    it("flags a partial venue", () => {
+        const values = { ...emptyFormValues(), venue: { ...emptyFormValues().venue, city: "Amsterdam" } };
+
+        expect(formLevelError(values)).toBe(
+            "Street, city and country are required when a venue is given.",
+        );
+    });
+
+    it("is undefined when startsAt is before endsAt", () => {
+        const values = {
+            ...emptyFormValues(),
+            startsAt: new Date("2026-10-01T18:00:00.000Z"),
+            endsAt: new Date("2026-10-01T21:00:00.000Z"),
+        };
+
+        expect(formLevelError(values)).toBeUndefined();
+    });
+
+    it("rejects endsAt equal to startsAt", () => {
+        const same = new Date("2026-10-01T18:00:00.000Z");
+        const values = { ...emptyFormValues(), startsAt: same, endsAt: same };
+
+        expect(formLevelError(values)).toBe("Ends must be after starts.");
+    });
+
+    it("rejects endsAt before startsAt", () => {
+        const values = {
+            ...emptyFormValues(),
+            startsAt: new Date("2026-10-08T18:00:00.000Z"),
+            endsAt: new Date("2026-10-01T21:00:00.000Z"),
+        };
+
+        expect(formLevelError(values)).toBe("Ends must be after starts.");
+    });
+
+    it("returns a plain string, not an object (avoids '[object Object]' rendering)", () => {
+        const values = {
+            ...emptyFormValues(),
+            startsAt: new Date("2026-10-08T18:00:00.000Z"),
+            endsAt: new Date("2026-10-01T21:00:00.000Z"),
+        };
+
+        expect(typeof formLevelError(values)).toBe("string");
     });
 });
 

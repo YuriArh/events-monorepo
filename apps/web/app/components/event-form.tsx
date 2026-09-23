@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { issuesByField, toEventInput, venueIsEmpty, type EventFormValues } from "@/lib/event-form";
-import { imageUrl } from "@/lib/events";
+import { formLevelError, issuesByField, toEventInput, type EventFormValues } from "@/lib/event-form";
+import { ApiError, imageUrl } from "@/lib/events";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
 const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } });
@@ -77,6 +77,9 @@ function ImagePreview({ file, existingKey }: { file: File | null; existingKey: s
 
     if (!src) return null;
 
+    // next/image can't take a blob: URL (the preview of a not-yet-uploaded
+    // file) cleanly, so a plain <img> is the correct choice here.
+    // biome-ignore lint/performance/noImgElement: object/blob URL preview, next/image doesn't support it
     return <img src={src} alt="" {...stylex.props(styles.preview)} />;
 }
 
@@ -94,19 +97,7 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
     const form = useForm({
         defaultValues: initialValues,
         validators: {
-            onSubmit: ({ value }: { value: EventFormValues }) => {
-                if (venueIsEmpty(value.venue)) return undefined;
-
-                const missing = (["line1", "city", "country"] as const).filter(
-                    (key) => value.venue[key].trim() === "",
-                );
-
-                // A plain string, not { form: "..." }: the subscriber below renders
-                // this value directly, and an object stringifies to "[object Object]".
-                return missing.length > 0
-                    ? "Street, city and country are required when a venue is given."
-                    : undefined;
-            },
+            onSubmit: ({ value }: { value: EventFormValues }) => formLevelError(value),
         },
         onSubmit: async ({ value }) => {
             setSubmitError(null);
@@ -118,7 +109,11 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
             );
 
             if (!parsed.success) {
-                setFieldErrors(issuesByField(parsed.error.issues));
+                const fields = issuesByField(parsed.error.issues);
+                setFieldErrors(fields);
+                // Not every field has a dedicated inline renderer, so also surface
+                // the banner: a rejection must never be silent.
+                setSubmitError(Object.values(fields)[0] ?? "Please fix the errors below.");
                 return;
             }
 
@@ -127,7 +122,19 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
             } catch (error) {
                 // The form keeps its values so the user can retry — see the
                 // partial-failure note in the design doc.
-                setSubmitError(error instanceof Error ? error.message : "Something went wrong");
+                if (error instanceof ApiError && error.issues) {
+                    const fields = issuesByField(error.issues);
+                    setFieldErrors(fields);
+                    // Some server-rejected paths (e.g. the address contract's
+                    // "city", "line1") don't line up with any field this form
+                    // renders inline (which uses "venue.city", "venue.line1", ...),
+                    // so lead with the specific issue message rather than the
+                    // generic "Validation error" — a rejection must never be silent
+                    // *or* vague.
+                    setSubmitError(Object.values(fields)[0] ?? error.message);
+                } else {
+                    setSubmitError(error instanceof Error ? error.message : "Something went wrong");
+                }
             }
         },
     });
@@ -185,10 +192,14 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                         <Textarea
                             id="description"
                             rows={4}
+                            maxLength={2000}
                             value={field.state.value}
                             onBlur={field.handleBlur}
                             onChange={(event) => field.handleChange(event.target.value)}
                         />
+                        {fieldErrors.description && (
+                            <p {...stylex.props(styles.error, typography.sm)}>{fieldErrors.description}</p>
+                        )}
                     </div>
                 )}
             </form.Field>
@@ -204,6 +215,9 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                                 value={field.state.value}
                                 onChange={(value) => field.handleChange(value)}
                             />
+                            {fieldErrors.startsAt && (
+                                <p {...stylex.props(styles.error, typography.sm)}>{fieldErrors.startsAt}</p>
+                            )}
                         </div>
                     )}
                 </form.Field>
@@ -218,6 +232,9 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                                 value={field.state.value}
                                 onChange={(value) => field.handleChange(value)}
                             />
+                            {fieldErrors.endsAt && (
+                                <p {...stylex.props(styles.error, typography.sm)}>{fieldErrors.endsAt}</p>
+                            )}
                         </div>
                     )}
                 </form.Field>
@@ -272,6 +289,9 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                                     onBlur={field.handleBlur}
                                     onChange={(event) => field.handleChange(event.target.value)}
                                 />
+                                {fieldErrors[name] && (
+                                    <p {...stylex.props(styles.error, typography.sm)}>{fieldErrors[name]}</p>
+                                )}
                             </div>
                         )}
                     </form.Field>
