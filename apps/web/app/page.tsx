@@ -168,14 +168,6 @@ const styles = stylex.create({
         },
         color: "#fff",
     },
-    field: {
-        display: "grid",
-        gap: "0.5rem",
-        paddingBlock: "1rem",
-    },
-    fieldError: {
-        color: colors.destructive,
-    },
     spinner: {
         animationName: spin,
         animationDuration: "1s",
