@@ -53,7 +53,7 @@ describe("toSuggestion", () => {
 
 	// These three are the whole reason the filter exists: line1, city and
 	// country are NOT NULL and there is no manual entry to fall back on.
-	it.each(["street", "city", "country"])("rejects a feature with no %s", (key) => {
+	it.each<keyof typeof complete>(["street", "city", "country"])("rejects a feature with no %s", (key) => {
 		const { [key]: _removed, ...incomplete } = complete;
 
 		expect(toSuggestion(feature(incomplete))).toBeNull();
