@@ -157,6 +157,11 @@ export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
                 <Autocomplete.Input
                     id={id}
                     placeholder="Search for an address"
+                    // Mirrors the contract's `q.max(200)` (packages/contracts):
+                    // a paste past that length would otherwise reach the API
+                    // and come back as a 400, rendered as a lookup outage
+                    // rather than the client-side input problem it is.
+                    maxLength={200}
                     {...stylex.props(styles.input)}
                 />
 
