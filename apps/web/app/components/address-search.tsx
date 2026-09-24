@@ -122,14 +122,33 @@ export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
             itemToStringValue={(item: GeocodeSuggestion) => item.display}
             value={query}
             onValueChange={(next: string, eventDetails: AutocompleteRootChangeEventDetails) => {
+                // A selection can commit via a native click OR via a
+                // pointerdown-elsewhere/mouseup-on-item drag release — Base
+                // UI's ComboboxItem fires both paths into the same internal
+                // handler, and only that handler (not a per-item onClick)
+                // reliably observes both: on the mouseup-only path no native
+                // DOM click ever fires, so a React onClick on the item would
+                // silently never run. Both commit paths funnel into this
+                // callback with reason "item-press", so that's the single
+                // source of truth for "a suggestion was picked" — matched
+                // back to the full suggestion object by its display text.
+                if (eventDetails.reason === "item-press") {
+                    const match = items.find((item) => item.display === next) ?? null;
+                    if (match) {
+                        onChange(toSelection(match));
+                    }
+                    setQuery(next);
+                    return;
+                }
+
                 setQuery(next);
 
                 // Base UI also calls this after a selection commits, to fill the
-                // input with the picked item's display text (reason "item-press")
-                // — that is not the user editing anything, and must not be
-                // treated as abandoning the selection that was just made. Only a
-                // genuine edit ("input-change") can mean the box no longer
-                // matches what would be saved.
+                // input with the picked item's display text — that is not the
+                // user editing anything, and must not be treated as abandoning
+                // the selection that was just made. Only a genuine edit
+                // ("input-change") can mean the box no longer matches what
+                // would be saved.
                 if (value && next !== value.display && eventDetails.reason === "input-change") {
                     onChange(null);
                 }
@@ -165,10 +184,6 @@ export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
                                 <Autocomplete.Item
                                     key={item.osmId}
                                     value={item}
-                                    onClick={() => {
-                                        onChange(toSelection(item));
-                                        setQuery(item.display);
-                                    }}
                                     {...stylex.props(styles.item)}>
                                     {item.display}
                                 </Autocomplete.Item>
