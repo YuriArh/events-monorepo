@@ -1,43 +1,26 @@
 import type { CreateAddressInput, CreateEventInput } from "@repo/contracts";
 
 import { ApiError, type EventRecord } from "./events";
-
-export type VenueValues = {
-    label: string;
-    line1: string;
-    line2: string;
-    city: string;
-    region: string;
-    postalCode: string;
-    country: string;
-};
+import type { AddressSelection } from "./geocode";
 
 export type EventFormValues = {
     name: string;
     description: string;
     startsAt: Date | null;
     endsAt: Date | null;
-    venue: VenueValues;
+    /** A geocoded selection, or an address saved before geocoding existed.
+     *  Null when the event has no venue. There is no manual entry. */
+    address: AddressSelection | null;
     imageFile: File | null;
     existingImageKey: string | null;
 };
-
-const emptyVenue = (): VenueValues => ({
-    label: "",
-    line1: "",
-    line2: "",
-    city: "",
-    region: "",
-    postalCode: "",
-    country: "",
-});
 
 export const emptyFormValues = (): EventFormValues => ({
     name: "",
     description: "",
     startsAt: null,
     endsAt: null,
-    venue: emptyVenue(),
+    address: null,
     imageFile: null,
     existingImageKey: null,
 });
@@ -53,23 +36,26 @@ export const toFormValues = (event: EventRecord): EventFormValues => ({
     description: event.description ?? "",
     startsAt: event.startsAt ? new Date(event.startsAt) : null,
     endsAt: event.endsAt ? new Date(event.endsAt) : null,
-    venue: event.address
+    address: event.address
         ? {
-              label: event.address.label ?? "",
+              osmId: event.address.osmId,
+              display: [event.address.line1, event.address.city, event.address.country].join(", "),
               line1: event.address.line1,
-              line2: event.address.line2 ?? "",
               city: event.address.city,
-              region: event.address.region ?? "",
-              postalCode: event.address.postalCode ?? "",
+              region: event.address.region,
+              postalCode: event.address.postalCode,
               country: event.address.country,
+              // Deliberately not defaulted to 0: see AddressSelection. A
+              // legacy address keeps its missing coordinates missing, so
+              // saving an untouched venue cannot overwrite it with 0,0.
+              lat: event.address.lat,
+              lon: event.address.lon,
+              raw: event.address.raw ?? null,
           }
-        : emptyVenue(),
+        : null,
     imageFile: null,
     existingImageKey: event.imageKey,
 });
-
-export const venueIsEmpty = (venue: VenueValues) =>
-    Object.values(venue).every((value) => value.trim() === "");
 
 /**
  * Form-level (cross-field) validation, run from `EventForm`'s `onSubmit`
@@ -80,17 +66,9 @@ export const venueIsEmpty = (venue: VenueValues) =>
  * `event-form.tsx` renders the value directly, and an object stringifies to
  * "[object Object]".
  */
-export const formLevelError = (value: Pick<EventFormValues, "venue" | "startsAt" | "endsAt">): string | undefined => {
-    if (!venueIsEmpty(value.venue)) {
-        const missing = (["line1", "city", "country"] as const).filter(
-            (key) => value.venue[key].trim() === "",
-        );
-
-        if (missing.length > 0) {
-            return "Street, city and country are required when a venue is given.";
-        }
-    }
-
+export const formLevelError = (
+    value: Pick<EventFormValues, "startsAt" | "endsAt">,
+): string | undefined => {
     // Client-side mirror of the server's `endsAt > startsAt` rule (UX only —
     // the server remains authoritative). Catching it here avoids uploading an
     // image / creating an address for a submission the server would reject
@@ -137,14 +115,19 @@ export const resolveImageKey = async (
     return imageKey;
 };
 
-export const toAddressInput = (venue: VenueValues): CreateAddressInput => ({
-    label: orNull(venue.label),
-    line1: venue.line1.trim(),
-    line2: orNull(venue.line2),
-    city: venue.city.trim(),
-    region: orNull(venue.region),
-    postalCode: orNull(venue.postalCode),
-    country: venue.country.trim(),
+export const toAddressInput = (suggestion: AddressSelection): CreateAddressInput => ({
+    // Street-address results carry no name, and the venue-name input is gone.
+    label: null,
+    line1: suggestion.line1,
+    line2: null,
+    city: suggestion.city,
+    region: suggestion.region,
+    postalCode: suggestion.postalCode,
+    country: suggestion.country,
+    lat: suggestion.lat,
+    lon: suggestion.lon,
+    osmId: suggestion.osmId,
+    raw: suggestion.raw,
 });
 
 type AddressCalls = {
@@ -156,23 +139,22 @@ type AddressCalls = {
  * Step 2 of the submit sequence. Updating in place is safe because Event.addressId
  * is unique — an address belongs to exactly one event.
  *
- * The address contract's issues key by their own field names ("city", "line1",
- * "country", ...), but the form renders venue inputs under "venue.city",
- * "venue.line1", etc. A server rejection of the address call is re-thrown with
- * its issue paths prefixed with "venue" so `issuesByField` (called by the
- * form on the caught `ApiError`) produces keys the form actually renders
- * inline, instead of writing to dead state nothing reads.
+ * The form renders a single `address` field. A server rejection of the
+ * address call is re-thrown with its issue paths prefixed with "address" so
+ * `issuesByField` (called by the form on the caught `ApiError`) produces keys
+ * the form actually renders inline, instead of writing to dead state nothing
+ * reads.
  */
 export const resolveAddressId = async (
     values: EventFormValues,
     existingAddressId: string | null,
     api: AddressCalls,
 ): Promise<string | null> => {
-    if (venueIsEmpty(values.venue)) {
+    if (!values.address) {
         return null;
     }
 
-    const input = toAddressInput(values.venue);
+    const input = toAddressInput(values.address);
 
     try {
         if (existingAddressId) {
@@ -187,7 +169,7 @@ export const resolveAddressId = async (
             throw new ApiError(
                 error.message,
                 error.status,
-                error.issues.map((issue) => ({ ...issue, path: ["venue", ...issue.path] })),
+                error.issues.map((issue) => ({ ...issue, path: ["address", ...issue.path] })),
             );
         }
 

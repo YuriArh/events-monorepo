@@ -8,10 +8,23 @@ import {
     issuesByField,
     resolveAddressId,
     resolveImageKey,
+    toAddressInput,
     toEventInput,
     toFormValues,
-    venueIsEmpty,
 } from "./event-form";
+
+const SUGGESTION = {
+    osmId: "W123456",
+    display: "Nieuwmarkt 4, Amsterdam, Netherlands",
+    line1: "Nieuwmarkt 4",
+    city: "Amsterdam",
+    region: "North Holland",
+    postalCode: "1012 CR",
+    country: "Netherlands",
+    lat: 52.3723,
+    lon: 4.9002,
+    raw: { type: "Feature" },
+};
 
 const record: EventRecord = {
     id: "e1",
@@ -32,6 +45,10 @@ const record: EventRecord = {
         region: null,
         postalCode: "1011 AB",
         country: "NL",
+        lat: 52.3723,
+        lon: 4.9002,
+        osmId: "W123456",
+        raw: { type: "Feature" },
         createdAt: "2026-09-01T00:00:00.000Z",
         updatedAt: "2026-09-01T00:00:00.000Z",
     },
@@ -52,14 +69,91 @@ describe("toFormValues", () => {
         expect(values.endsAt).toBeNull();
     });
 
-    it("lifts the nested address into venue fields", () => {
-        expect(toFormValues(record).venue).toMatchObject({ line1: "1 Civic Square", city: "Amsterdam" });
+    it("rebuilds a selection from a stored address so the edit form shows it", () => {
+        const values = toFormValues({
+            id: "e1",
+            name: "Retro",
+            description: null,
+            addressId: "a1",
+            imageKey: null,
+            startsAt: null,
+            endsAt: null,
+            createdAt: "",
+            updatedAt: "",
+            address: {
+                id: "a1",
+                label: null,
+                line1: "Nieuwmarkt 4",
+                line2: null,
+                city: "Amsterdam",
+                region: "North Holland",
+                postalCode: "1012 CR",
+                country: "Netherlands",
+                lat: 52.3723,
+                lon: 4.9002,
+                osmId: "W123456",
+                raw: { type: "Feature" },
+                createdAt: "",
+                updatedAt: "",
+            },
+        } as never);
+
+        expect(values.address?.display).toBe("Nieuwmarkt 4, Amsterdam, Netherlands");
+        expect(values.address?.osmId).toBe("W123456");
     });
 
-    it("uses blank venue fields when the event has no address", () => {
-        expect(toFormValues({ ...record, addressId: null, address: null }).venue).toEqual(
-            emptyFormValues().venue,
-        );
+    // A legacy address predates geocoding and has no coordinates. Defaulting
+    // them to 0 would put it at Null Island, and saving the event without
+    // touching the venue would write that over a perfectly good row.
+    it("keeps a pre-geocoding address's missing coordinates missing", () => {
+        const values = toFormValues({
+            id: "e1",
+            name: "Retro",
+            description: null,
+            addressId: "a1",
+            imageKey: null,
+            startsAt: null,
+            endsAt: null,
+            createdAt: "",
+            updatedAt: "",
+            address: {
+                id: "a1",
+                label: null,
+                line1: "1 Civic Square",
+                line2: null,
+                city: "Amsterdam",
+                region: null,
+                postalCode: null,
+                country: "NL",
+                lat: null,
+                lon: null,
+                osmId: null,
+                raw: null,
+                createdAt: "",
+                updatedAt: "",
+            },
+        } as never);
+
+        expect(values.address?.lat).toBeNull();
+        expect(values.address?.lon).toBeNull();
+        expect(values.address && toAddressInput(values.address).lat).toBeNull();
+    });
+
+    it("leaves the address null for an event without one", () => {
+        const values = toFormValues({
+            id: "e1",
+            name: "Retro",
+            description: null,
+            addressId: null,
+            imageKey: null,
+            startsAt: null,
+            endsAt: null,
+            createdAt: "",
+            updatedAt: "",
+            address: null,
+        } as never);
+
+        expect(values.address).toBeNull();
     });
 });
 
@@ -86,14 +180,23 @@ describe("toEventInput", () => {
     });
 });
 
-describe("venueIsEmpty", () => {
-    it("is true when every field is blank or whitespace", () => {
-        expect(venueIsEmpty(emptyFormValues().venue)).toBe(true);
-        expect(venueIsEmpty({ ...emptyFormValues().venue, city: "   " })).toBe(true);
-    });
+describe("toAddressInput", () => {
+    it("carries the geocoding fields onto the address payload", () => {
+        const input = toAddressInput(SUGGESTION);
 
-    it("is false once any field has content", () => {
-        expect(venueIsEmpty({ ...emptyFormValues().venue, city: "Amsterdam" })).toBe(false);
+        expect(input).toEqual({
+            label: null,
+            line1: "Nieuwmarkt 4",
+            line2: null,
+            city: "Amsterdam",
+            region: "North Holland",
+            postalCode: "1012 CR",
+            country: "Netherlands",
+            lat: 52.3723,
+            lon: 4.9002,
+            osmId: "W123456",
+            raw: { type: "Feature" },
+        });
     });
 });
 
@@ -116,61 +219,49 @@ describe("resolveImageKey", () => {
     });
 });
 
-describe("resolveAddressId", () => {
-    const api = () => ({
-        create: vi.fn().mockResolvedValue({ id: "new-address" }),
-        update: vi.fn().mockResolvedValue({ id: "existing" }),
+describe("resolveAddressId with a selected address", () => {
+    it("returns null when no address is selected", async () => {
+        const api = { create: vi.fn(), update: vi.fn() };
+
+        await expect(
+            resolveAddressId({ ...emptyFormValues(), address: null }, null, api),
+        ).resolves.toBeNull();
+        expect(api.create).not.toHaveBeenCalled();
     });
 
-    it("returns null and writes nothing when the venue is empty", async () => {
-        const calls = api();
+    it("creates an address from the selection", async () => {
+        const api = { create: vi.fn().mockResolvedValue({ id: "a1" }), update: vi.fn() };
 
-        await expect(resolveAddressId(emptyFormValues(), null, calls)).resolves.toBeNull();
-        expect(calls.create).not.toHaveBeenCalled();
-        expect(calls.update).not.toHaveBeenCalled();
+        await expect(
+            resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, null, api),
+        ).resolves.toBe("a1");
+        expect(api.create).toHaveBeenCalledWith(toAddressInput(SUGGESTION));
     });
 
-    it("creates an address when the event has none", async () => {
-        const calls = api();
-        const values = {
-            ...emptyFormValues(),
-            venue: { ...emptyFormValues().venue, line1: "1 Civic Square", city: "Amsterdam", country: "NL" },
-        };
+    it("updates the existing address in place", async () => {
+        const api = { create: vi.fn(), update: vi.fn().mockResolvedValue({ id: "a1" }) };
 
-        await expect(resolveAddressId(values, null, calls)).resolves.toBe("new-address");
-        expect(calls.create).toHaveBeenCalledWith(
-            expect.objectContaining({ line1: "1 Civic Square", city: "Amsterdam", country: "NL" }),
-        );
+        await expect(
+            resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, "a1", api),
+        ).resolves.toBe("a1");
+        expect(api.update).toHaveBeenCalledWith("a1", toAddressInput(SUGGESTION));
+        expect(api.create).not.toHaveBeenCalled();
     });
 
-    // Safe because the relation is 1:1 — no other event can reference this address.
-    it("updates in place when the event already has an address", async () => {
-        const calls = api();
-        const values = {
-            ...emptyFormValues(),
-            venue: { ...emptyFormValues().venue, line1: "2 New Road", city: "Rotterdam", country: "NL" },
-        };
+    it("detaches when the address is cleared on an event that had one", async () => {
+        const api = { create: vi.fn(), update: vi.fn() };
 
-        await expect(resolveAddressId(values, "existing", calls)).resolves.toBe("existing");
-        expect(calls.update).toHaveBeenCalledWith("existing", expect.objectContaining({ city: "Rotterdam" }));
-    });
-
-    it("detaches when the venue is cleared on an event that had one", async () => {
-        const calls = api();
-
-        await expect(resolveAddressId(emptyFormValues(), "existing", calls)).resolves.toBeNull();
-        expect(calls.update).not.toHaveBeenCalled();
+        await expect(
+            resolveAddressId({ ...emptyFormValues(), address: null }, "existing", api),
+        ).resolves.toBeNull();
+        expect(api.update).not.toHaveBeenCalled();
     });
 
     // Regression: the address contract's issues key by "city", "line1", etc.,
-    // but the form only renders inline errors under "venue.city",
-    // "venue.line1", etc. Without this prefixing, a server rejection wrote to
-    // dead state nothing reads.
-    it("prefixes a create rejection's issue paths with 'venue'", async () => {
-        const values = {
-            ...emptyFormValues(),
-            venue: { ...emptyFormValues().venue, line1: "1 Civic Square", city: "Amsterdam", country: "NL" },
-        };
+    // but the form only renders inline errors under "address.city",
+    // "address.line1", etc. Without this prefixing, a server rejection wrote
+    // to dead state nothing reads.
+    it("prefixes a create rejection's issue paths with 'address'", async () => {
         const calls = {
             create: vi.fn().mockRejectedValue(
                 new ApiError("Validation error", 400, [
@@ -180,21 +271,17 @@ describe("resolveAddressId", () => {
             update: vi.fn(),
         };
 
-        const failure = resolveAddressId(values, null, calls);
+        const failure = resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, null, calls);
 
         await expect(failure).rejects.toBeInstanceOf(ApiError);
         await failure.catch((error: ApiError) => {
             expect(error.issues).toEqual([
-                { path: ["venue", "city"], message: "Too big: expected string to have <=255 characters" },
+                { path: ["address", "city"], message: "Too big: expected string to have <=255 characters" },
             ]);
         });
     });
 
-    it("prefixes an update rejection's issue paths with 'venue'", async () => {
-        const values = {
-            ...emptyFormValues(),
-            venue: { ...emptyFormValues().venue, line1: "2 New Road", city: "Rotterdam", country: "NL" },
-        };
+    it("prefixes an update rejection's issue paths with 'address'", async () => {
         const calls = {
             create: vi.fn(),
             update: vi
@@ -204,37 +291,31 @@ describe("resolveAddressId", () => {
                 ),
         };
 
-        const failure = resolveAddressId(values, "existing", calls);
+        const failure = resolveAddressId(
+            { ...emptyFormValues(), address: SUGGESTION },
+            "existing",
+            calls,
+        );
 
         await expect(failure).rejects.toBeInstanceOf(ApiError);
         await failure.catch((error: ApiError) => {
-            expect(error.issues).toEqual([{ path: ["venue", "line1"], message: "Too long" }]);
+            expect(error.issues).toEqual([{ path: ["address", "line1"], message: "Too long" }]);
         });
     });
 
     it("rethrows a rejection with no issues unchanged", async () => {
-        const values = {
-            ...emptyFormValues(),
-            venue: { ...emptyFormValues().venue, line1: "1 Civic Square", city: "Amsterdam", country: "NL" },
-        };
         const notFound = new ApiError("Address not found", 404);
         const calls = { create: vi.fn().mockRejectedValue(notFound), update: vi.fn() };
 
-        await expect(resolveAddressId(values, null, calls)).rejects.toBe(notFound);
+        await expect(
+            resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, null, calls),
+        ).rejects.toBe(notFound);
     });
 });
 
 describe("formLevelError", () => {
-    it("is undefined for an empty venue and no dates", () => {
+    it("is undefined for an empty form with no dates", () => {
         expect(formLevelError(emptyFormValues())).toBeUndefined();
-    });
-
-    it("flags a partial venue", () => {
-        const values = { ...emptyFormValues(), venue: { ...emptyFormValues().venue, city: "Amsterdam" } };
-
-        expect(formLevelError(values)).toBe(
-            "Street, city and country are required when a venue is given.",
-        );
     });
 
     it("is undefined when startsAt is before endsAt", () => {

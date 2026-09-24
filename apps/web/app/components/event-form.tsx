@@ -6,6 +6,7 @@ import { useForm } from "@tanstack/react-form";
 import { Loader2Icon } from "lucide-react";
 import { createEventInput } from "@repo/contracts";
 
+import { AddressSearch } from "@/components/address-search";
 import { DateTimePicker } from "@/components/date-time-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,23 +21,7 @@ const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { trans
 /** Field names this form renders an inline error under — kept in one place so
  * the banner logic below can tell an issue with inline coverage from one that
  * would otherwise be silent. */
-const VENUE_FIELDS = [
-    ["venue.label", "Venue name"],
-    ["venue.line1", "Street"],
-    ["venue.line2", "Street line 2"],
-    ["venue.city", "City"],
-    ["venue.region", "Region"],
-    ["venue.postalCode", "Postal code"],
-    ["venue.country", "Country"],
-] as const;
-
-const INLINE_FIELDS = new Set<string>([
-    "name",
-    "description",
-    "startsAt",
-    "endsAt",
-    ...VENUE_FIELDS.map(([name]) => name),
-]);
+const INLINE_FIELDS = new Set<string>(["name", "description", "startsAt", "endsAt", "address"]);
 
 /**
  * Picks the banner message for a set of field errors. The banner is a last
@@ -79,16 +64,6 @@ const styles = stylex.create({
         animationIterationCount: "infinite",
         animationTimingFunction: "linear",
     },
-    section: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-        borderTopWidth: "1px",
-        borderTopStyle: "solid",
-        borderTopColor: colors.border,
-        paddingTop: "1.5rem",
-    },
-    sectionTitle: { fontWeight: 500 },
     hint: { color: colors.mutedForeground },
 });
 
@@ -298,33 +273,26 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                 )}
             </form.Field>
 
-            <div {...stylex.props(styles.section)}>
-                <div>
-                    <p {...stylex.props(styles.sectionTitle)}>Venue</p>
-                    <p {...stylex.props(styles.hint, typography.sm)}>
-                        Optional. Street, city and country are required together.
-                    </p>
-                </div>
-
-                {VENUE_FIELDS.map(([name, label]) => (
-                    <form.Field key={name} name={name}>
-                        {(field) => (
-                            <div {...stylex.props(styles.field)}>
-                                <Label htmlFor={name}>{label}</Label>
-                                <Input
-                                    id={name}
-                                    value={field.state.value}
-                                    onBlur={field.handleBlur}
-                                    onChange={(event) => field.handleChange(event.target.value)}
-                                />
-                                {fieldErrors[name] && (
-                                    <p {...stylex.props(styles.error, typography.sm)}>{fieldErrors[name]}</p>
-                                )}
-                            </div>
+            <form.Field name="address">
+                {(field) => (
+                    <div {...stylex.props(styles.field)}>
+                        <Label htmlFor="address">Venue</Label>
+                        <AddressSearch
+                            id="address"
+                            value={field.state.value}
+                            onChange={(value) => field.handleChange(value)}
+                        />
+                        <p {...stylex.props(styles.hint, typography.sm)}>
+                            Optional. Search for a street address.
+                        </p>
+                        {fieldErrors.address && (
+                            <p {...stylex.props(styles.error, typography.sm)}>
+                                {fieldErrors.address}
+                            </p>
                         )}
-                    </form.Field>
-                ))}
-            </div>
+                    </div>
+                )}
+            </form.Field>
 
             <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
                 {(formError) =>
