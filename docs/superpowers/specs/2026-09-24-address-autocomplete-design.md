@@ -76,7 +76,18 @@ geocodeSuggestion = {
 }
 ```
 
-`GET /api/geocode` returns `{ suggestions: geocodeSuggestion[] }`.
+`GET /api/geocode` returns:
+
+```ts
+{
+  suggestions: geocodeSuggestion[],
+  // How many upstream results were dropped by the filter below. Lets the form
+  // tell "nothing matched" apart from "matches existed but none were usable",
+  // which are different messages to the user. Without this the browser cannot
+  // distinguish them, because filtering happens server-side.
+  filtered: number,
+}
+```
 
 A query shorter than 3 characters is a 400. An upstream failure or timeout is a
 503 with a message the form can display.
@@ -102,9 +113,9 @@ deduplicated by `osm_type` + `osm_id`, preserving Photon's ordering.
 `street` alone.
 
 **Consequence, accepted deliberately:** parks, landmarks and venues searched by
-name will return nothing, because they carry no street. The empty state must say
-so — "Only street addresses can be selected. Try including a street name." — not
-merely "No results".
+name will return nothing, because they carry no street. So will any address
+OpenStreetMap does not have. See "Not found" below — the user's only recourse is
+to search again with a different address.
 
 ## Data model
 
@@ -146,6 +157,31 @@ validator are removed. One combobox replaces them:
 
 Venue remains optional: an event can be created with no address at all.
 
+### Not found
+
+There is no manual entry. When a search returns nothing the field shows a
+message saying the address was not found and inviting another search — it does
+not offer a way to type an address in by hand, and it does not let the raw
+search text be saved as an address. The only path forward is searching again
+for an address that exists.
+
+The message must distinguish the two reasons a search comes back empty, because
+they call for different next steps from the user:
+
+- **Nothing matched** — "Address not found. Try a different address."
+- **Matches existed but none were usable** (results came back, but all lacked a
+  street, city or country and were filtered out) — say that only street
+  addresses can be selected, so a user who searched for a park or a venue by
+  name understands why a place they know exists is missing, rather than
+  concluding the search is broken.
+
+This distinction is a requirement, not a nicety: without it the most common
+failure — searching a venue by name — looks identical to a typo.
+
+Both states are distinct from an upstream failure, which is covered under
+"Failure handling" and must read as a problem with the service rather than a
+verdict on the address.
+
 ### Venue name
 
 Dropped. Street-address results from Photon rarely carry a `name`, so a venue
@@ -177,7 +213,10 @@ the rest of the form continues to work.
 - **Integration, API:** route tests with the upstream stubbed. Cover a filtered
   result set, a cache hit not re-calling upstream, an upstream failure becoming
   503, and a too-short query becoming 400. No test calls the real Photon.
-- **Unit, web:** debounce and selection-state logic.
+- **Unit, web:** debounce and selection-state logic, plus the three empty
+  states, which are easy to conflate and are the feature's most-hit paths:
+  nothing matched, everything filtered out (`filtered > 0` with no suggestions),
+  and upstream failure. Each must produce a different message.
 - **E2E:** the current spec fills Street, City and Country by hand and the test
   `requires street, city and country together` asserts a rule this design
   deletes. Both are rewritten to drive the combobox. The e2e run stubs our own
