@@ -24,6 +24,18 @@ const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { trans
 const INLINE_FIELDS = new Set<string>(["name", "description", "startsAt", "endsAt", "address"]);
 
 /**
+ * `resolveAddressId` prefixes every rejected address issue path with
+ * "address" (see event-form.ts), so a real error key is "address.city",
+ * "address.line1", etc. — never the bare "address" that `INLINE_FIELDS`
+ * lists. This is the one shared check both `bannerMessage` and the address
+ * field's inline renderer use, so "address" only has to mean "starts with
+ * address" in one place.
+ */
+function isInlineField(field: string): boolean {
+    return INLINE_FIELDS.has(field) || field.startsWith("address.");
+}
+
+/**
  * Picks the banner message for a set of field errors. The banner is a last
  * resort for issues nothing renders inline — if every issue already has an
  * inline renderer, showing the same message a second time in the banner is
@@ -32,8 +44,14 @@ const INLINE_FIELDS = new Set<string>(["name", "description", "startsAt", "endsA
 function bannerMessage(fields: Record<string, string>, fallback: string): string | null {
     if (Object.keys(fields).length === 0) return fallback;
 
-    const uncovered = Object.entries(fields).find(([field]) => !INLINE_FIELDS.has(field));
+    const uncovered = Object.entries(fields).find(([field]) => !isInlineField(field));
     return uncovered ? uncovered[1] : null;
+}
+
+/** The first address-contract error, however its key is spelled ("address" or
+ * "address.<subfield>") — see `isInlineField`. */
+function addressFieldError(fields: Record<string, string>): string | undefined {
+    return Object.entries(fields).find(([field]) => field === "address" || field.startsWith("address."))?.[1];
 }
 
 const styles = stylex.create({
@@ -285,9 +303,9 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                         <p {...stylex.props(styles.hint, typography.sm)}>
                             Optional. Search for a street address.
                         </p>
-                        {fieldErrors.address && (
+                        {addressFieldError(fieldErrors) && (
                             <p {...stylex.props(styles.error, typography.sm)}>
-                                {fieldErrors.address}
+                                {addressFieldError(fieldErrors)}
                             </p>
                         )}
                     </div>
