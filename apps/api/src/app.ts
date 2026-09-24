@@ -7,6 +7,7 @@ import { ZodError } from "@repo/contracts";
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
 import { addressRoutes } from "./modules/addresses/address.routes.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
+import { geocodeRoutes } from "./modules/geocoding/geocode.routes.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -56,6 +57,7 @@ export function buildApp() {
 
   app.register(eventRoutes, { prefix: "/api/events" });
   app.register(addressRoutes, { prefix: "/api/addresses" });
+  app.register(geocodeRoutes, { prefix: "/api/geocode" });
 
   return app;
 }
