@@ -107,6 +107,11 @@ export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
             // Filtering happens server-side; the built-in filter would hide
             // valid results by re-filtering them against the raw input.
             filter={null}
+            // Without this, Base UI's own stringify-on-select falls back to a
+            // JSON dump of the whole suggestion object (it has no `label`/
+            // `value` keys), overwriting the input with garbage right after a
+            // selection is made.
+            itemToStringValue={(item: GeocodeSuggestion) => item.display}
             value={query}
             onValueChange={(next: string, eventDetails: AutocompleteRootChangeEventDetails) => {
                 setQuery(next);
