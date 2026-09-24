@@ -41,6 +41,8 @@ need a form.
 
 ## API module layering
 
+Modules: `events/`, `addresses/`, `geocoding/`.
+
 Each feature under `apps/api/src/modules/<name>/` splits into four files, and the
 dependency direction only ever points down:
 
@@ -89,6 +91,26 @@ Splitting the module into several files satisfies one resolver at the expense
 of the other. Keeping everything in one file with nothing to resolve satisfies
 both. Don't split it up to "tidy up" the schemas without solving that
 resolution conflict first.
+
+## Geocoding
+
+Address search proxies Photon through `GET /api/geocode`; the browser never
+calls the geocoder directly. The proxy is the only place that knows the upstream
+URL, and it is what sets a `User-Agent` identifying this application — a header
+browsers cannot set — caches responses, collapses concurrent identical queries
+and filters out results that cannot fill `line1`, `city` and `country`.
+
+Nominatim was the original choice and is not usable here: its policy forbids
+client-side autocomplete outright and caps the public instance at one request
+per second. Photon is built for type-ahead over the same OpenStreetMap data.
+
+Because filtering happens server-side, the response carries a `filtered` count
+alongside `suggestions` so the form can tell "nothing matched" apart from
+"matches existed but none were usable" — two different messages to the user.
+
+Addresses store the full Photon feature in `Address.raw` alongside the derived
+columns and `lat`/`lon`/`osmId`. All of those are nullable: addresses created
+before geocoding existed have none of them.
 
 ## Error handling
 

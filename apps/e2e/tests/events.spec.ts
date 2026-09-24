@@ -2,10 +2,41 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 
 const API_URL = "http://localhost:4000";
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "../fixtures/event.png");
+
+const SUGGESTION = {
+    osmId: "W123456",
+    display: "Nieuwmarkt 4, Amsterdam, Netherlands",
+    line1: "Nieuwmarkt 4",
+    city: "Amsterdam",
+    region: "North Holland",
+    postalCode: "1012 CR",
+    country: "Netherlands",
+    lat: 52.3723,
+    lon: 4.9002,
+    raw: { type: "Feature", properties: { osm_id: 123456 } },
+};
+
+/**
+ * Serves the address search from a fixture. Photon is a free third-party
+ * service; pointing the suite at it would make these tests fail on someone
+ * else's outage and spend somebody else's quota.
+ */
+const stubGeocode = async (
+    page: Page,
+    body: { suggestions: unknown[]; filtered: number } = { suggestions: [SUGGESTION], filtered: 0 },
+) => {
+    await page.route("**/api/geocode**", (route) =>
+        route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(body),
+        }),
+    );
+};
 
 /** Names are unique per run so specs don't collide with existing dev data. */
 const uniqueName = (label: string) => `${label} ${Date.now()}`;
@@ -169,6 +200,8 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
     const startsDay = daysFromNow(30);
     const endsDay = daysFromNow(37);
 
+    await stubGeocode(page);
+
     await page.goto("/");
     // "New Event" navigates (an <a>, styled as a button), so its accessible role is "link".
     await page.getByRole("link", { name: "New Event" }).click();
@@ -180,9 +213,9 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
     await pickDateTime(page, "Ends", dayAccessibleNameFor(endsDay), "21:00");
     await page.getByLabel("Image").setInputFiles(FIXTURE);
 
-    await page.getByLabel("Street", { exact: true }).fill("1 Civic Square");
-    await page.getByLabel("City").fill("Amsterdam");
-    await page.getByLabel("Country").fill("NL");
+    await page.getByLabel("Venue").fill("Nieuwmarkt");
+    await page.getByRole("option", { name: SUGGESTION.display }).click();
+    await expect(page.getByLabel("Venue")).toHaveValue(SUGGESTION.display);
 
     await page.getByRole("button", { name: "Create" }).click();
 
@@ -231,18 +264,65 @@ test("blocks submitting without a name", async ({ page }) => {
     await expect(page.getByRole("button", { name: "Create" })).toBeDisabled();
 });
 
-test("requires street, city and country together", async ({ page }) => {
+test("tells the user when no address matched", async ({ page }) => {
+    await stubGeocode(page, { suggestions: [], filtered: 0 });
     await page.goto("/events/new");
 
-    await page.getByLabel("Name", { exact: true }).fill(uniqueName("Partial venue"));
-    await page.getByLabel("City").fill("Amsterdam");
-    await page.getByRole("button", { name: "Create" }).click();
+    await page.getByLabel("Venue").fill("zzzzzzzzzz");
 
-    // The hint text above the venue fields ("Optional. Street, city and country
-    // are required together.") also matches this substring, so anchor on the
-    // full form-level error message to avoid a strict-mode ambiguity.
-    await expect(
-        page.getByText("Street, city and country are required when a venue is given."),
-    ).toBeVisible();
-    await expect(page).toHaveURL(/\/events\/new$/);
+    await expect(page.getByText("Address not found. Try a different address.")).toBeVisible();
+});
+
+test("explains the filter when matches existed but none were usable", async ({ page }) => {
+    // What a user sees after searching a park or a venue by name: Photon
+    // returned results, but none carried the street/city/country the database
+    // requires. Saying only "not found" here would read as a typo.
+    await stubGeocode(page, { suggestions: [], filtered: 5 });
+    await page.goto("/events/new");
+
+    await page.getByLabel("Venue").fill("Vondelpark");
+
+    await expect(page.getByText(/only street addresses/i)).toBeVisible();
+});
+
+test("keeps the event saveable when address lookup is down", async ({ page, request }) => {
+    await page.route("**/api/geocode**", (route) =>
+        route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: '{"message":"Address lookup is unavailable right now."}',
+        }),
+    );
+    await page.goto("/events/new");
+
+    const name = uniqueName("E2E event");
+
+    await page.getByLabel("Name", { exact: true }).fill(name);
+    await page.getByLabel("Venue").fill("Nieuwmarkt");
+
+    await expect(page.getByText(/unavailable/i)).toBeVisible();
+
+    // The suggestions popup is still open at this point; Base UI hides the
+    // rest of the page from the accessibility tree while it's open, so the
+    // Create button below can't be found until it's closed.
+    await page.keyboard.press("Escape");
+
+    // The venue is optional: a geocoder outage must never block saving.
+    await expect(page.getByRole("button", { name: "Create" })).toBeEnabled();
+
+    await page.getByRole("button", { name: "Create" }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    // No suggestion was ever selected (the outage never let one load), so this
+    // event has no Address to clean up — only the Event row itself.
+    const events: Array<{ id: string; name: string; addressId: string | null }> = await (
+        await request.get(`${API_URL}/api/events`)
+    ).json();
+    const created = events.find((candidate) => candidate.name === name);
+    if (created) {
+        await request.delete(`${API_URL}/api/events/${created.id}`);
+        if (created.addressId !== null) {
+            await request.delete(`${API_URL}/api/addresses/${created.addressId}`);
+        }
+    }
 });

@@ -79,3 +79,7 @@ running locally.
   push detail down into integration tests.
 
 First run needs browsers: `pnpm --filter e2e exec playwright install chromium`.
+
+- Never let a test call a third-party service. The address-search specs stub
+  `**/api/geocode**`; pointing them at Photon would make them fail on someone
+  else's outage and spend someone else's quota.
