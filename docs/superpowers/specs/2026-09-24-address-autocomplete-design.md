@@ -136,9 +136,11 @@ model Address {
 `raw` is nullable because addresses created before this feature have no Photon
 object. `lat`/`lon`/`osmId` are nullable for the same reason.
 
-`label` keeps its column but is no longer written or rendered — see "Venue
-name" below. Dropping the column is a destructive migration for no benefit and
-is deliberately not part of this work.
+`label` keeps its column and is preserved on a save that doesn't touch the
+venue (an edit carries a loaded address's `label`/`line2` through unchanged),
+but no UI in this feature writes a new one or renders it — see "Venue name"
+below. Dropping the column is a destructive migration for no benefit and is
+deliberately not part of this work.
 
 ## Form
 

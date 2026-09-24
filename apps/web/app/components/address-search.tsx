@@ -132,6 +132,10 @@ export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
                 // callback with reason "item-press", so that's the single
                 // source of truth for "a suggestion was picked" — matched
                 // back to the full suggestion object by its display text.
+                // Base UI's onValueChange carries no item reference, only the
+                // string, so two results with an identical display (same
+                // street/city/country from different OSM features) are
+                // indistinguishable here and the first one wins.
                 if (eventDetails.reason === "item-press") {
                     const match = items.find((item) => item.display === next) ?? null;
                     if (match) {
