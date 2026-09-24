@@ -58,6 +58,11 @@ Routes never call Prisma directly, and the repository never throws HTTP
 concerns. This is what makes the service layer testable without a web server,
 and it's why swapping the data layer stays a one-file change.
 
+`geocoding/` doesn't follow that exact split: it proxies an upstream service
+rather than owning a table, so it has no `*.repository.ts`, and instead adds a
+`*.mapper.ts` (Photon feature → `GeocodeSuggestion`). It keeps `*.routes.ts`,
+`*.service.ts`, `*.schema.ts`, and `*.types.ts`.
+
 `buildApp()` in `apps/api/src/app.ts` constructs the Fastify instance and is
 exported separately from `server.ts` (which listens), so tests can call
 `app.inject()` without binding a port.
@@ -98,7 +103,8 @@ Address search proxies Photon through `GET /api/geocode`; the browser never
 calls the geocoder directly. The proxy is the only place that knows the upstream
 URL, and it is what sets a `User-Agent` identifying this application — a header
 browsers cannot set — caches responses, collapses concurrent identical queries
-and filters out results that cannot fill `line1`, `city` and `country`.
+and filters out results that cannot fill `line1`, `city` and `country`, that
+have no usable `[lon, lat]` coordinates, or that have no `osm_type`/`osm_id`.
 
 Nominatim was the original choice and is not usable here: its policy forbids
 client-side autocomplete outright and caps the public instance at one request
