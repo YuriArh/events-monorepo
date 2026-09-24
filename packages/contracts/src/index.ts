@@ -22,6 +22,12 @@ export const createAddressInput = z.object({
   region: z.string().max(255).nullish(),
   postalCode: z.string().max(32).nullish(),
   country: z.string().min(1).max(255),
+  // Populated from a Photon result; null for addresses created before
+  // geocoding existed, which is why every one of these is optional.
+  lat: z.number().min(-90).max(90).nullish(),
+  lon: z.number().min(-180).max(180).nullish(),
+  osmId: z.string().max(64).nullish(),
+  raw: z.unknown().optional(),
 });
 
 export const updateAddressInput = createAddressInput.partial();
@@ -73,6 +79,52 @@ export type CreateEventInput = z.infer<typeof createEventInput>;
 export type UpdateEventInput = z.infer<typeof updateEventInput>;
 export type CreateEventPayload = z.infer<typeof createEventPayload>;
 export type UpdateEventPayload = z.infer<typeof updateEventPayload>;
+
+// ---------------------------------------------------------------- geocoding
+
+export const geocodeQuery = z.object({
+  // Three characters is the floor: shorter queries match half a country and
+  // waste an upstream call.
+  q: z.string().min(3).max(200),
+  // Arrives as a string on the query string, hence coerce.
+  limit: z.coerce.number().int().min(1).max(10).default(8),
+});
+
+/**
+ * One selectable address. Only results that can fill line1, city and country
+ * ever become a suggestion — see the geocoding mapper — because those columns
+ * are NOT NULL and there is no manual entry to fall back on.
+ */
+export const geocodeSuggestion = z.object({
+  /** `${osm_type}${osm_id}`, e.g. "W123456". Stable per place; used as the key. */
+  osmId: z.string().min(1).max(64),
+  /** What the dropdown shows: "Nieuwmarkt 4, Amsterdam, Netherlands". */
+  display: z.string().min(1),
+  line1: z.string().min(1).max(255),
+  city: z.string().min(1).max(255),
+  region: z.string().max(255).nullable(),
+  postalCode: z.string().max(32).nullable(),
+  country: z.string().min(1).max(255),
+  lat: z.number().min(-90).max(90),
+  lon: z.number().min(-180).max(180),
+  /** The complete Photon feature, passed through verbatim. */
+  raw: z.unknown(),
+});
+
+export const geocodeResponse = z.object({
+  suggestions: z.array(geocodeSuggestion),
+  /**
+   * How many upstream results the filter dropped. The browser cannot work this
+   * out for itself because filtering happens server-side, and it needs it to
+   * tell "nothing matched" apart from "matches existed but none were usable" —
+   * two different messages to the user.
+   */
+  filtered: z.number().int().min(0),
+});
+
+export type GeocodeQuery = z.infer<typeof geocodeQuery>;
+export type GeocodeSuggestion = z.infer<typeof geocodeSuggestion>;
+export type GeocodeResponse = z.infer<typeof geocodeResponse>;
 
 export { ZodError } from "zod";
 export { z };

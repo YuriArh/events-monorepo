@@ -62,7 +62,6 @@ relative imports — see `docs/architecture.md` for why.
 geocodeQuery = { q: string (min 3, max 200), limit: number (1-10, default 8) }
 
 geocodeSuggestion = {
-  id: string,          // `${osm_type}${osm_id}`, stable per place
   display: string,     // "Nieuwmarkt 4, Amsterdam, Netherlands"
   line1: string,       // "Nieuwmarkt 4" — street plus house number when present
   city: string,
@@ -71,7 +70,7 @@ geocodeSuggestion = {
   country: string,
   lat: number,
   lon: number,
-  osmId: string,
+  osmId: string,      // `${osm_type}${osm_id}` — stable per place, used as the key
   raw: unknown,        // the complete Photon feature, passed through verbatim
 }
 ```
