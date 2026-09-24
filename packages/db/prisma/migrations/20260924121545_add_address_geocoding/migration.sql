@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Address" ADD COLUMN     "lat" DOUBLE PRECISION,
+ADD COLUMN     "lon" DOUBLE PRECISION,
+ADD COLUMN     "osmId" TEXT,
+ADD COLUMN     "raw" JSONB;

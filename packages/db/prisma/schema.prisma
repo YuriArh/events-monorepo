@@ -38,6 +38,13 @@ model Address {
   postalCode String?
   country    String
 
+  // Populated from the Photon result that produced this address. Null for
+  // addresses created before geocoding existed.
+  lat   Float?
+  lon   Float?
+  osmId String?
+  raw   Json?
+
   event Event?
 
   createdAt DateTime @default(now())
