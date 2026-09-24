@@ -40,7 +40,9 @@ export const toFormValues = (event: EventRecord): EventFormValues => ({
         ? {
               osmId: event.address.osmId,
               display: [event.address.line1, event.address.city, event.address.country].join(", "),
+              label: event.address.label,
               line1: event.address.line1,
+              line2: event.address.line2,
               city: event.address.city,
               region: event.address.region,
               postalCode: event.address.postalCode,
@@ -116,10 +118,13 @@ export const resolveImageKey = async (
 };
 
 export const toAddressInput = (suggestion: AddressSelection): CreateAddressInput => ({
-    // Street-address results carry no name, and the venue-name input is gone.
-    label: null,
+    // A fresh Photon pick carries neither (there is no venue-name input), but
+    // a selection rebuilt from a stored Address (see `toFormValues`) carries
+    // its saved `label`/`line2` through here, so an untouched venue's
+    // edit-save doesn't null out columns a fresh pick never had.
+    label: suggestion.label,
     line1: suggestion.line1,
-    line2: null,
+    line2: suggestion.line2,
     city: suggestion.city,
     region: suggestion.region,
     postalCode: suggestion.postalCode,

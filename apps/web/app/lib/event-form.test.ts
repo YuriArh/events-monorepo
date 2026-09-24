@@ -16,7 +16,9 @@ import {
 const SUGGESTION = {
     osmId: "W123456",
     display: "Nieuwmarkt 4, Amsterdam, Netherlands",
+    label: null,
     line1: "Nieuwmarkt 4",
+    line2: null,
     city: "Amsterdam",
     region: "North Holland",
     postalCode: "1012 CR",
@@ -137,6 +139,49 @@ describe("toFormValues", () => {
         expect(values.address?.lat).toBeNull();
         expect(values.address?.lon).toBeNull();
         expect(values.address && toAddressInput(values.address).lat).toBeNull();
+    });
+
+    // Regression: a legacy address can carry a venue `label` and a `line2`
+    // (e.g. "Riverside Studio" / "Unit 3"). `AddressSelection` used to have no
+    // such keys at all, so `toFormValues` never read them off a loaded
+    // `Address`, and `toAddressInput` hardcoded both to null on every write —
+    // silently wiping them on the very next edit-save, even when the venue
+    // field itself was never touched.
+    it("preserves a loaded address's label and line2 through a save", () => {
+        const values = toFormValues({
+            id: "e1",
+            name: "Retro",
+            description: null,
+            addressId: "a1",
+            imageKey: null,
+            startsAt: null,
+            endsAt: null,
+            createdAt: "",
+            updatedAt: "",
+            address: {
+                id: "a1",
+                label: "Riverside Studio",
+                line1: "42 Dock Road",
+                line2: "Unit 3",
+                city: "London",
+                region: null,
+                postalCode: null,
+                country: "GB",
+                lat: 51.5,
+                lon: -0.1,
+                osmId: "W1",
+                raw: null,
+                createdAt: "",
+                updatedAt: "",
+            },
+        } as never);
+
+        expect(values.address?.label).toBe("Riverside Studio");
+        expect(values.address?.line2).toBe("Unit 3");
+
+        const input = values.address && toAddressInput(values.address);
+        expect(input?.label).toBe("Riverside Studio");
+        expect(input?.line2).toBe("Unit 3");
     });
 
     it("leaves the address null for an event without one", () => {

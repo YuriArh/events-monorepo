@@ -69,8 +69,16 @@ const styles = stylex.create({
 export type AddressSearchProps = {
     id: string;
     value: AddressSelection | null;
-    onChange: (value: GeocodeSuggestion | null) => void;
+    onChange: (value: AddressSelection | null) => void;
 };
+
+/** A fresh Photon pick never carries a venue `label` or a `line2` — see
+ *  `AddressSelection`. */
+const toSelection = (suggestion: GeocodeSuggestion): AddressSelection => ({
+    ...suggestion,
+    label: null,
+    line2: null,
+});
 
 export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
     const [query, setQuery] = useState(value?.display ?? "");
@@ -158,7 +166,7 @@ export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
                                     key={item.osmId}
                                     value={item}
                                     onClick={() => {
-                                        onChange(item);
+                                        onChange(toSelection(item));
                                         setQuery(item.display);
                                     }}
                                     {...stylex.props(styles.item)}>

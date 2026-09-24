@@ -16,6 +16,13 @@ export type AddressSelection = Omit<GeocodeSuggestion, "lat" | "lon" | "osmId"> 
     lat: number | null;
     lon: number | null;
     osmId: string | null;
+    // A fresh Photon pick never has either: a street-address geocoder result
+    // carries no venue name and no second address line. Both default to null
+    // for a `GeocodeSuggestion`-derived selection; a selection rebuilt from a
+    // stored `Address` (see `toFormValues`) carries the saved values through
+    // instead, so an untouched venue's edit-save can't null them out.
+    label: string | null;
+    line2: string | null;
 };
 
 /** Mirrors the contract's `q.min(3)`. Shorter queries are never sent. */
