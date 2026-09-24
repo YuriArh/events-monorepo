@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import * as stylex from "@stylexjs/stylex";
-import { Autocomplete } from "@base-ui/react/autocomplete";
+import { Autocomplete, type AutocompleteRootChangeEventDetails } from "@base-ui/react/autocomplete";
 import { useQuery } from "@tanstack/react-query";
 import { XIcon } from "lucide-react";
 
@@ -108,16 +108,19 @@ export function AddressSearch({ id, value, onChange }: AddressSearchProps) {
             // valid results by re-filtering them against the raw input.
             filter={null}
             value={query}
-            onValueChange={(next: string) => {
+            onValueChange={(next: string, eventDetails: AutocompleteRootChangeEventDetails) => {
                 setQuery(next);
 
-                // Editing the text abandons the previous selection: what is in
-                // the box must always be what would be saved.
-                if (value && next !== value.display) {
+                // Base UI also calls this after a selection commits, to fill the
+                // input with the picked item's display text (reason "item-press")
+                // — that is not the user editing anything, and must not be
+                // treated as abandoning the selection that was just made. Only a
+                // genuine edit ("input-change") can mean the box no longer
+                // matches what would be saved.
+                if (value && next !== value.display && eventDetails.reason === "input-change") {
                     onChange(null);
                 }
-            }}
-            onItemHighlighted={() => undefined}>
+            }}>
             <div {...stylex.props(styles.inputRow)}>
                 <Autocomplete.Input
                     id={id}
