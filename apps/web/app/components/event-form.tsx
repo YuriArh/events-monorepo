@@ -133,7 +133,7 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                     const fields = issuesByField(error.issues);
                     setFieldErrors(fields);
                     // `resolveAddressId` prefixes address-contract issue paths
-                    // ("city", "line1", ...) with "venue" before this catch ever
+                    // ("city", "line1", ...) with "address" before this catch ever
                     // sees them, so `fields` keys line up with the inline
                     // renderers below. The banner is then only for whatever, if
                     // anything, still has no inline renderer.
@@ -152,9 +152,9 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                 event.preventDefault();
                 // Cleared here, at the start of every submit attempt, rather than
                 // inside the `onSubmit` handler above: TanStack Form skips that
-                // handler entirely when `validators.onSubmit` (the date-range /
-                // venue rule) blocks the submission, which would otherwise leave
-                // a stale banner and stale field errors on screen (F3).
+                // handler entirely when `validators.onSubmit` (the date-range
+                // rule) blocks the submission, which would otherwise leave a
+                // stale banner and stale field errors on screen (F3).
                 setSubmitError(null);
                 setFieldErrors({});
                 form.handleSubmit();
