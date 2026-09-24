@@ -236,6 +236,12 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
         await page.getByRole("link", { name: `Edit ${name}` }).click();
         await expect(page).toHaveURL(/\/edit$/);
 
+        // Asserts the venue survived the full round-trip that hid the
+        // label/line2 bug: DB -> API -> toFormValues -> AddressSearch's
+        // initial displayed value. The create step above selected this
+        // address, so it must still show here, unedited.
+        await expect(page.getByLabel("Venue")).toHaveValue(SUGGESTION.display);
+
         await page.getByLabel("Name", { exact: true }).fill(renamed);
         await page.getByLabel("Image").setInputFiles(FIXTURE);
         await page.getByRole("button", { name: "Save" }).click();
