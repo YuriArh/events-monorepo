@@ -158,3 +158,50 @@ describe("DELETE /api/addresses/:id", () => {
         expect(response.statusCode).toBe(404);
     });
 });
+
+describe("geocoded addresses", () => {
+    it("round-trips coordinates and the raw feature", async () => {
+        const raw = { type: "Feature", properties: { osm_id: 123456 } };
+
+        const created = await app.inject({
+            method: "POST",
+            url: "/api/addresses",
+            headers: { "content-type": "application/json" },
+            payload: {
+                line1: "Nieuwmarkt 4",
+                city: "Amsterdam",
+                country: "Netherlands",
+                lat: 52.3723,
+                lon: 4.9002,
+                osmId: "W123456",
+                raw,
+            },
+        });
+
+        expect(created.statusCode).toBe(201);
+
+        const body = created.json<{ id: string; lat: number; osmId: string; raw: unknown }>();
+
+        expect(body.lat).toBe(52.3723);
+        expect(body.osmId).toBe("W123456");
+        expect(body.raw).toEqual(raw);
+    });
+
+    // Addresses created before geocoding existed have no raw feature, and
+    // Prisma needs DbNull rather than null for a nullable Json column.
+    it("stores an address with no geocoding fields", async () => {
+        const created = await app.inject({
+            method: "POST",
+            url: "/api/addresses",
+            headers: { "content-type": "application/json" },
+            payload: { line1: "1 Civic Square", city: "Amsterdam", country: "NL" },
+        });
+
+        expect(created.statusCode).toBe(201);
+
+        const body = created.json<{ lat: number | null; raw: unknown }>();
+
+        expect(body.lat).toBeNull();
+        expect(body.raw).toBeNull();
+    });
+});
