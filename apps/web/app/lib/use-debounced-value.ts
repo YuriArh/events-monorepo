@@ -1,0 +1,19 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+/**
+ * Delays a fast-changing value. Used to keep a keystroke from becoming an
+ * upstream geocoder call — Photon throttles extensive use.
+ */
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
+    const [debounced, setDebounced] = useState(value);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebounced(value), delayMs);
+
+        return () => clearTimeout(timer);
+    }, [value, delayMs]);
+
+    return debounced;
+}
