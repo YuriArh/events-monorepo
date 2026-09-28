@@ -16,7 +16,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonStyleProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
@@ -229,10 +229,13 @@ export default function HomePage() {
                                 : "Create and manage your events"}
                         </p>
                     </div>
-                    <Button render={<Link href="/events/new" />}>
+                    {/* A real <a>, styled to match Button: Base UI's Button must not wrap
+                        a link (it would force role="button" onto navigation semantics
+                        that are already correct) — see buttonStyleProps' doc comment. */}
+                    <Link href="/events/new" {...buttonStyleProps()}>
                         <PlusIcon />
                         New Event
-                    </Button>
+                    </Link>
                 </div>
 
                 {pageError && <div {...stylex.props(styles.errorBanner, typography.sm)}>{pageError}</div>}
@@ -255,10 +258,10 @@ export default function HomePage() {
                                         Get started by creating your first event.
                                     </p>
                                 </div>
-                                <Button variant="outline" render={<Link href="/events/new" />}>
+                                <Link href="/events/new" {...buttonStyleProps("outline")}>
                                     <PlusIcon />
                                     New Event
-                                </Button>
+                                </Link>
                             </div>
                         ) : (
                             <Table>
@@ -287,13 +290,12 @@ export default function HomePage() {
                                             </TableCell>
                                             <TableCell style={styles.cell}>
                                                 <div {...stylex.props(styles.actions)}>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon-sm"
+                                                    <Link
+                                                        href={`/events/${event.id}/edit`}
                                                         aria-label={`Edit ${event.name}`}
-                                                        render={<Link href={`/events/${event.id}/edit`} />}>
+                                                        {...buttonStyleProps("ghost", "icon-sm")}>
                                                         <PencilIcon />
-                                                    </Button>
+                                                    </Link>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon-sm"

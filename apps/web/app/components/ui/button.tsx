@@ -238,8 +238,24 @@ export type ButtonProps = Omit<ButtonPrimitive.Props, "style"> & {
     style?: StyleXStyles;
 };
 
-function Button({ className, style, variant = "default", size = "default", ...restProps }: ButtonProps) {
-    const styleProps = props(
+/**
+ * The same class/style computation `Button` applies to itself, exposed for
+ * elements that must not go through `Button`'s `render` composition — most
+ * notably a navigation `<a>`. Base UI's own docs are explicit that `Button`
+ * should never wrap a link: it forces `role="button"` (via `nativeButton`)
+ * onto an element that already has correct native link semantics, which is
+ * the wrong signal to assistive tech for something that navigates. Their
+ * documented fix is to style the anchor directly instead of composing it
+ * through `Button` — this is that styling, factored out so a plain
+ * `<Link {...buttonStyleProps()}>` looks identical to a real `Button`.
+ */
+export const buttonStyleProps = (
+    variant: ButtonVariant = "default",
+    size: ButtonSize = "default",
+    className?: string,
+    style?: StyleXStyles,
+) =>
+    props(
         styles.base,
         sizeTypography[size],
         variantStyles[variant],
@@ -247,6 +263,9 @@ function Button({ className, style, variant = "default", size = "default", ...re
         customClassName(className),
         style,
     );
+
+function Button({ className, style, variant = "default", size = "default", ...restProps }: ButtonProps) {
+    const styleProps = buttonStyleProps(variant, size, className, style);
 
     return (
         <ButtonPrimitive data-slot="button" data-size={size} data-variant={variant} {...restProps} {...styleProps} />
