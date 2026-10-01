@@ -20,6 +20,7 @@ import { Button, buttonStyleProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
+import { canModifyEvent, useMe } from "@/lib/auth";
 import { type EventRecord, eventKeys, eventsApi } from "@/lib/events";
 
 const spin = stylex.keyframes({
@@ -183,6 +184,7 @@ const messageOf = (error: unknown, fallback: string) => (error instanceof Error 
 
 export default function HomePage() {
     const queryClient = useQueryClient();
+    const { data: me } = useMe();
 
     const [deletingEvent, setDeletingEvent] = useState<EventRecord | null>(null);
 
@@ -290,20 +292,24 @@ export default function HomePage() {
                                             </TableCell>
                                             <TableCell style={styles.cell}>
                                                 <div {...stylex.props(styles.actions)}>
-                                                    <Link
-                                                        href={`/events/${event.id}/edit`}
-                                                        aria-label={`Edit ${event.name}`}
-                                                        {...buttonStyleProps("ghost", "icon-sm")}>
-                                                        <PencilIcon />
-                                                    </Link>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon-sm"
-                                                        aria-label={`Delete ${event.name}`}
-                                                        style={styles.deleteButton}
-                                                        onClick={() => setDeletingEvent(event)}>
-                                                        <Trash2Icon />
-                                                    </Button>
+                                                    {canModifyEvent(me, event) && (
+                                                        <>
+                                                        <Link
+                                                            href={`/events/${event.id}/edit`}
+                                                            aria-label={`Edit ${event.name}`}
+                                                            {...buttonStyleProps("ghost", "icon-sm")}>
+                                                            <PencilIcon />
+                                                        </Link>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            aria-label={`Delete ${event.name}`}
+                                                            style={styles.deleteButton}
+                                                            onClick={() => setDeletingEvent(event)}>
+                                                            <Trash2Icon />
+                                                        </Button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>

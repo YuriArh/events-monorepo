@@ -8,6 +8,7 @@ import { Loader2Icon } from "lucide-react";
 
 import { EventForm } from "@/components/event-form";
 import { Card, CardContent } from "@/components/ui/card";
+import { canModifyEvent, useRequireUser } from "@/lib/auth";
 import { resolveImageKey, toEventInput, toFormValues, type EventFormValues } from "@/lib/event-form";
 import { eventKeys, eventsApi, uploadImage } from "@/lib/events";
 import { colors, typography } from "@/styles/tokens.stylex";
@@ -46,11 +47,13 @@ const styles = stylex.create({
 export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
+    const { me, ready } = useRequireUser();
     const queryClient = useQueryClient();
 
     const { data: event, isPending, error } = useQuery({
         queryKey: eventKeys.detail(id),
         queryFn: () => eventsApi.get(id),
+        enabled: ready,
     });
 
     const updateEvent = useMutation({
@@ -77,7 +80,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
                 <Card>
                     <CardContent>
-                        {isPending ? (
+                        {!ready || isPending ? (
                             <div {...stylex.props(styles.state, typography.sm)}>
                                 <Loader2Icon {...stylex.props(styles.spinner)} size={16} />
                                 Loading…
@@ -85,6 +88,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                         ) : error || !event ? (
                             <div {...stylex.props(styles.state, typography.sm)}>
                                 {error instanceof Error ? error.message : "Event not found"}
+                            </div>
+                        ) : !canModifyEvent(me, event) ? (
+                            <div {...stylex.props(styles.state, typography.sm)}>
+                                Only the organizer can edit this event.
                             </div>
                         ) : (
                             <EventForm
