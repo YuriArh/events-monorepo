@@ -13,8 +13,8 @@ export function LocalDateTime({ startsAt, endsAt }: { startsAt: string; endsAt: 
     const [text, setText] = useState(() => `${formatEventWhen(startsAt, endsAt, "UTC")} UTC`);
 
     useEffect(() => {
-        setText(formatEventWhen(startsAt, endsAt));
+        setText(`${formatEventWhen(startsAt, endsAt)} (${Intl.DateTimeFormat().resolvedOptions().timeZone})`);
     }, [startsAt, endsAt]);
 
-    return <time dateTime={startsAt}>{text}</time>;
+    return <time dateTime={startsAt} suppressHydrationWarning>{text}</time>;
 }

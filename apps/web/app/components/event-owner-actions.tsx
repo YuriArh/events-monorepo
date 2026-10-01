@@ -16,10 +16,10 @@ const styles = stylex.create({
 });
 
 /** Edit/Delete for the organizer or an admin. The API enforces this; hiding is UX. */
-export function EventOwnerActions({ event }: { event: EventRecord }) {
+export function EventOwnerActions({ event }: { event: Pick<EventRecord, "id" | "name" | "organizerId"> }) {
     const router = useRouter();
     const { data: me } = useMe();
-    const [deleting, setDeleting] = useState<EventRecord | null>(null);
+    const [deleting, setDeleting] = useState<Pick<EventRecord, "id" | "name"> | null>(null);
 
     if (!canModifyEvent(me, event)) return null;
 

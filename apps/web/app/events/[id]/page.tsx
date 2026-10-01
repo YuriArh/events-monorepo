@@ -72,7 +72,7 @@ export default async function EventPage({ params }: Props) {
         <div {...stylex.props(styles.page)}>
             <main {...stylex.props(styles.main)}>
                 <Link href="/" {...stylex.props(styles.back, typography.sm)}>
-                    ← All events
+                    <span aria-hidden="true">←</span> All events
                 </Link>
 
                 {event.imageKey && (
@@ -93,7 +93,7 @@ export default async function EventPage({ params }: Props) {
                     </span>
                 </div>
 
-                <EventOwnerActions event={event} />
+                <EventOwnerActions event={{ id: event.id, name: event.name, organizerId: event.organizerId }} />
 
                 {event.description && <p {...stylex.props(styles.description)}>{event.description}</p>}
 
@@ -103,13 +103,14 @@ export default async function EventPage({ params }: Props) {
                             Venue
                         </h2>
                         <address {...stylex.props(styles.address)}>
-                            {formatAddressLines(address).map((line) => (
-                                <div key={line}>{line}</div>
+                            {formatAddressLines(address).map((line, index) => (
+                                // biome-ignore lint/suspicious/noArrayIndexKey: static, never-reordered lines; index disambiguates duplicates
+                                <div key={`${index}-${line}`}>{line}</div>
                             ))}
                         </address>
                         {address.lat !== null && address.lon !== null && (
                             <iframe
-                                title={`Map of ${address.label ?? address.line1}`}
+                                title={`Map of ${address.label || address.line1}`}
                                 src={osmEmbedUrl(address.lat, address.lon)}
                                 loading="lazy"
                                 {...stylex.props(styles.map)}

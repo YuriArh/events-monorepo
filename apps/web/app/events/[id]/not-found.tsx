@@ -20,6 +20,7 @@ const styles = stylex.create({
 export default function EventNotFound() {
     return (
         <main {...stylex.props(styles.main)}>
+            <title>Event not found</title>
             <h1 {...stylex.props(styles.title)}>Event not found</h1>
             <p {...stylex.props(styles.text, typography.sm)}>
                 It may have been deleted. <Link href="/">Back to all events</Link>

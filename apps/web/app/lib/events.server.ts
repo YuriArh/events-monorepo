@@ -9,6 +9,8 @@ import type { EventRecord } from "./events";
  * edits must show immediately.
  */
 export const getEvent = cache(async (id: string) => {
+    // URL normalisation would turn these into the list / root endpoints.
+    if (id === "." || id === "..") return null;
     try {
         return await request<EventRecord>(`/api/events/${encodeURIComponent(id)}`, { cache: "no-store" });
     } catch (error) {

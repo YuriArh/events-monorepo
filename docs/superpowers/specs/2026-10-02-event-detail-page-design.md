@@ -1,7 +1,7 @@
 # Event detail page design
 
 **Date:** 2026-10-02
-**Status:** Draft, awaiting review
+**Status:** Implemented
 
 ## Goal
 
@@ -122,7 +122,7 @@ cookie is forwarded.
   `router.push("/")`.
 - `components/delete-event-dialog.tsx` — the confirmation dialog extracted
   from `app/page.tsx` so the list and the detail page share it (DRY). Props:
-  `event`, `open`, `onOpenChange`, `onDeleted`; owns the delete mutation and
+  `event`, `onClose`, `onDeleted?`; owns the delete mutation and
   its error text.
 
 ### Pure helpers — `apps/web/app/lib/event-detail.ts` (unit-tested)
