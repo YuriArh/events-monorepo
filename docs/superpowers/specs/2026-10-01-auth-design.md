@@ -129,8 +129,9 @@ Set-Cookie: sid=<token>; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000[; Secur
 
 - `HttpOnly` — page JavaScript cannot read it, so XSS cannot exfiltrate it.
 - `SameSite=Lax` — not sent on cross-site POST/PATCH/DELETE.
-- `Secure` when `NODE_ENV === "production"`. Omitted locally: the dev servers
-  run on plain HTTP.
+- `Secure` when `WEB_ORIGIN` is `https:` (not tied to `NODE_ENV`, so a
+  deployment that forgets to set it still gets `Secure`). Omitted locally: the
+  dev servers run on plain HTTP.
 - Set and cleared via `@fastify/cookie`. The cookie is not signed — the token
   is already unguessable, and the server-side lookup is the check.
 
@@ -290,7 +291,9 @@ interface Mailer {
 - `MemoryMailer` (test): stores messages so tests can pull the token out of
   the link.
 - `buildApp()` takes an optional `{ mailer }` option, so tests inject
-  `MemoryMailer`. Default is `ConsoleMailer`.
+  `MemoryMailer`. The `ConsoleMailer` default applies only when `NODE_ENV` is
+  `development` or `test`; otherwise (including unset) `buildApp()` throws
+  without an injected mailer.
 - Links are built from `WEB_ORIGIN`:
   `${WEB_ORIGIN}/reset-password?token=…`, `${WEB_ORIGIN}/verify-email?token=…`.
 

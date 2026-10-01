@@ -8,7 +8,7 @@ import { ZodError } from "@repo/contracts";
 
 import { ConsoleMailer, type Mailer } from "./lib/mailer.js";
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
-import { IS_PRODUCTION, WEB_ORIGIN } from "./lib/config.js";
+import { IS_DEV_OR_TEST, WEB_ORIGIN } from "./lib/config.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { sessionPlugin } from "./plugins/session.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
@@ -23,7 +23,7 @@ declare module "fastify" {
 }
 
 export type BuildAppOptions = {
-  /** Tests pass a MemoryMailer; development logs mail to the console. */
+  /** Required unless NODE_ENV is development or test, which fall back to logging mail to the console. */
   mailer?: Mailer;
   /** On by default; tests turn it off so signing up many users doesn't trip it. */
   rateLimits?: boolean;
@@ -32,8 +32,10 @@ export type BuildAppOptions = {
 const STATE_CHANGING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
 export function buildApp(options: BuildAppOptions = {}) {
-  if (IS_PRODUCTION && !options.mailer) {
-    throw new Error("A real Mailer must be configured in production");
+  // Fail closed: only an explicit development/test NODE_ENV may log mail
+  // (verification and reset links) to the console instead of sending it.
+  if (!IS_DEV_OR_TEST && !options.mailer) {
+    throw new Error("A real Mailer must be configured unless NODE_ENV is development or test");
   }
 
   const app = Fastify({

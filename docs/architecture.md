@@ -126,8 +126,9 @@ before geocoding existed have none of them.
 Self-built, email + password. Full design: `docs/superpowers/specs/2026-10-01-auth-design.md`.
 
 - **Sessions** live in Postgres. The `sid` cookie (`HttpOnly`, `SameSite=Lax`,
-  `Secure` in production) carries a random 32-byte token; `Session.tokenHash`
-  stores only its sha256. 30-day lifetime, renewed at most once a day.
+  `Secure` whenever `WEB_ORIGIN` is `https:` — `COOKIE_SECURE` in
+  `lib/config.ts`, deliberately not tied to `NODE_ENV`) carries a random
+  32-byte token; `Session.tokenHash` stores only its sha256. 30-day lifetime, renewed at most once a day.
 - **`plugins/session.ts`** resolves the cookie on every request into
   `request.user` (a `PublicUser`, never containing `passwordHash`).
   `requireAuth` -> 401, `requireRole` -> 403. Handlers behind `requireAuth` read
@@ -139,8 +140,9 @@ Self-built, email + password. Full design: `docs/superpowers/specs/2026-10-01-au
   what makes them single-use under concurrency.
 - **Mail** goes through the `Mailer` interface (`lib/mailer.ts`): logged to
   the console in development, captured in memory in tests. There is no real
-  provider yet, so `buildApp` throws when `NODE_ENV=production` and no
-  `Mailer` is injected.
+  provider yet. The console fallback fails closed: `buildApp` throws when no
+  `Mailer` is injected unless `NODE_ENV` is exactly `development` or `test`
+  (unset counts as production).
 - **No account-existence leak**: `POST /api/auth/password/forgot` replies 204
   immediately and runs the reset work fire-and-forget (failures are logged by
   error name only), so neither timing nor mailer errors reveal whether an
@@ -236,9 +238,15 @@ development; production needs object storage.
 | --------------------- | -------- | ----------------------------------------- |
 | `DATABASE_URL`        | api, db  | `apps/api/.env`, `packages/db/.env`        |
 | `NEXT_PUBLIC_API_URL` | web      | `apps/web/.env.local`, defaults to :4000   |
-| `WEB_ORIGIN`          | api      | CORS origin, Origin check, links in emails. Defaults to `http://localhost:3000` |
+| `WEB_ORIGIN`          | api      | CORS origin, Origin check, links in emails. Defaults to `http://localhost:3000`. An `https:` origin makes the session cookie `Secure` |
+| `NODE_ENV`            | api, db  | `development` (set by the api `dev` script) and `test` (set by Vitest) allow the console mailer; anything else, including unset, requires an injected `Mailer` and is treated as production. `production` also makes the db seed refuse to run |
 
 `.env` files are gitignored; `packages/db/.env.example` is the reference.
+
+`pnpm --filter api start` sets no `NODE_ENV`, so it refuses to start
+("A real Mailer must be configured…") until a real `Mailer` is wired into
+`server.ts`. That is intentional: a deployment must never log password-reset
+links to the console.
 
 ## CORS
 
