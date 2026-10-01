@@ -5,6 +5,7 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { ZodError } from "@repo/contracts";
 
+import { ConsoleMailer, type Mailer } from "./lib/mailer.js";
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
 import { WEB_ORIGIN } from "./lib/config.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
@@ -12,10 +13,23 @@ import { sessionPlugin } from "./plugins/session.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
 import { geocodeRoutes } from "./modules/geocoding/geocode.routes.js";
 
-export function buildApp() {
+declare module "fastify" {
+  interface FastifyInstance {
+    mailer: Mailer;
+  }
+}
+
+export type BuildAppOptions = {
+  /** Tests pass a MemoryMailer; development logs mail to the console. */
+  mailer?: Mailer;
+};
+
+export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test",
   });
+
+  app.decorate("mailer", options.mailer ?? new ConsoleMailer((line) => app.log.info(line)));
 
   app.register(cors, {
     origin: WEB_ORIGIN,

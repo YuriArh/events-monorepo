@@ -1,6 +1,8 @@
+import { WEB_ORIGIN } from "../../lib/config.js";
 import { generateToken, hashToken } from "../../lib/crypto.js";
+import type { Mailer } from "../../lib/mailer.js";
 import { hashPassword, verifyAgainstDummy, verifyPassword } from "../../lib/password.js";
-import { userRepository } from "../users/user.repository.js";
+import { type PublicUser, userRepository } from "../users/user.repository.js";
 import { authRepository } from "./auth.repository.js";
 import type { LoginInput, RegisterInput, SessionMeta } from "./auth.types.js";
 
@@ -24,6 +26,17 @@ export class EmailTakenError extends Error {
   }
 }
 
+const RESET_TTL_MS = 30 * 60 * 1000;
+const VERIFY_TTL_MS = DAY_MS;
+
+/** One message for unknown, expired, used and wrong-type tokens. */
+export class InvalidTokenError extends Error {
+  constructor() {
+    super("This link is invalid or has expired");
+    this.name = "InvalidTokenError";
+  }
+}
+
 /** The single place emails are normalized. The unique index relies on it. */
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -37,8 +50,25 @@ const startSession = async (userId: string, meta: SessionMeta) => {
   return { token, expiresAt };
 };
 
+const sendVerification = async (user: { id: string; email: string }, mailer: Mailer) => {
+  const token = generateToken();
+
+  await authRepository.issueToken({
+    userId: user.id,
+    type: "EMAIL_VERIFY",
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + VERIFY_TTL_MS),
+  });
+
+  await mailer.send({
+    to: user.email,
+    subject: "Confirm your email",
+    text: `Confirm your email address for eventapp:\n${WEB_ORIGIN}/verify-email?token=${token}\n\nThe link is valid for 24 hours.`,
+  });
+};
+
 export const authService = {
-  async register(input: RegisterInput, meta: SessionMeta) {
+  async register(input: RegisterInput, meta: SessionMeta, mailer: Mailer) {
     const user = await userRepository.createIfEmailFree({
       email: normalizeEmail(input.email),
       passwordHash: await hashPassword(input.password),
@@ -46,6 +76,8 @@ export const authService = {
     });
 
     if (!user) throw new EmailTakenError();
+
+    await sendVerification(user, mailer);
 
     return { user, session: await startSession(user.id, meta) };
   },
@@ -92,5 +124,44 @@ export const authService = {
 
   async logout(sessionId: string | null) {
     if (sessionId) await authRepository.deleteSession(sessionId);
+  },
+
+  /** Silent for unknown emails: the caller always answers 204. */
+  async requestPasswordReset(email: string, mailer: Mailer) {
+    const user = await userRepository.findByEmail(normalizeEmail(email));
+    if (!user) return;
+
+    const token = generateToken();
+
+    await authRepository.issueToken({
+      userId: user.id,
+      type: "PASSWORD_RESET",
+      tokenHash: hashToken(token),
+      expiresAt: new Date(Date.now() + RESET_TTL_MS),
+    });
+
+    await mailer.send({
+      to: user.email,
+      subject: "Reset your password",
+      text: `Set a new password for eventapp:\n${WEB_ORIGIN}/reset-password?token=${token}\n\nThe link is valid for 30 minutes. If you didn't ask for this, ignore this email.`,
+    });
+  },
+
+  async resetPassword(token: string, newPassword: string) {
+    const ok = await authRepository.resetPassword(hashToken(token), await hashPassword(newPassword));
+
+    if (!ok) throw new InvalidTokenError();
+  },
+
+  async verifyEmail(token: string) {
+    if (!(await authRepository.verifyEmail(hashToken(token)))) {
+      throw new InvalidTokenError();
+    }
+  },
+
+  async resendVerification(user: PublicUser, mailer: Mailer) {
+    if (user.emailVerifiedAt) return;
+
+    await sendVerification(user, mailer);
   },
 };
