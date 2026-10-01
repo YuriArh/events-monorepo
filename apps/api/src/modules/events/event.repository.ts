@@ -9,7 +9,18 @@ const withAddress = { address: true } as const;
  * column, so it refuses a bare `null` and wants `Prisma.DbNull` instead.
  */
 const toAddressData = (address: CreateAddressInput) => ({
-  ...address,
+  // Every optional column is written, so an update replaces the whole venue
+  // instead of leaving stale values from the previous one.
+  label: address.label ?? null,
+  line1: address.line1,
+  line2: address.line2 ?? null,
+  city: address.city,
+  region: address.region ?? null,
+  postalCode: address.postalCode ?? null,
+  country: address.country,
+  lat: address.lat ?? null,
+  lon: address.lon ?? null,
+  osmId: address.osmId ?? null,
   raw:
     address.raw === undefined || address.raw === null
       ? Prisma.DbNull

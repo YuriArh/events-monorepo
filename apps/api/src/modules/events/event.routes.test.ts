@@ -424,6 +424,56 @@ describe("event venue", () => {
         expect(response.json().issues[0].path[0]).toBe("address");
     });
 
+    it("replaces the whole venue on update, clearing omitted fields", async () => {
+        const created = await createEvent({
+            address: {
+                ...VENUE,
+                line2: "Floor 2",
+                region: "NH",
+                postalCode: "1011 AB",
+                lat: 52.3723,
+                lon: 4.9002,
+                osmId: "W123456",
+                raw: { type: "Feature" },
+            },
+        });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json" },
+            payload: { address: VENUE },
+        });
+
+        expect(response.json()).toMatchObject({
+            addressId: created.addressId,
+            address: {
+                id: created.addressId,
+                line2: null,
+                region: null,
+                postalCode: null,
+                lat: null,
+                lon: null,
+                osmId: null,
+                raw: null,
+            },
+        });
+    });
+
+    it("treats address null on an event with no venue as a no-op", async () => {
+        const created = await createEvent();
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json" },
+            payload: { address: null },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ addressId: null, address: null });
+    });
+
     it("no longer exposes /api/addresses", async () => {
         const response = await app.inject({
             method: "POST",
