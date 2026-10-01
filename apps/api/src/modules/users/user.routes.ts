@@ -3,7 +3,10 @@ import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { rateLimitOption } from "../../lib/rate-limits.js";
 import { clearSessionCookie } from "../../lib/session-cookie.js";
 import { currentUser, requireAuth } from "../../plugins/session.js";
-import { deleteAccountSchema, updateProfileSchema } from "./user.schema.js";
+import {
+  deleteAccountInput as deleteAccountSchema,
+  updateProfileInput as updateProfileSchema,
+} from "@repo/contracts";
 import { WrongPasswordError, userService } from "./user.service.js";
 
 const replyForDomainError = (error: unknown, reply: FastifyReply) => {
@@ -20,19 +23,25 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
   app.patch("/me", async (request) => {
     const input = updateProfileSchema.parse(request.body);
 
-    return { user: await userService.updateProfile(currentUser(request).id, input) };
+    return {
+      user: await userService.updateProfile(currentUser(request).id, input),
+    };
   });
 
-  app.delete("/me", rateLimitOption(app, "deleteAccount"), async (request, reply) => {
-    const { password } = deleteAccountSchema.parse(request.body);
+  app.delete(
+    "/me",
+    rateLimitOption(app, "deleteAccount"),
+    async (request, reply) => {
+      const { password } = deleteAccountSchema.parse(request.body);
 
-    try {
-      await userService.deleteAccount(currentUser(request).id, password);
-      clearSessionCookie(reply);
+      try {
+        await userService.deleteAccount(currentUser(request).id, password);
+        clearSessionCookie(reply);
 
-      return reply.status(204).send();
-    } catch (error) {
-      return replyForDomainError(error, reply);
+        return reply.status(204).send();
+      } catch (error) {
+        return replyForDomainError(error, reply);
+      }
     }
-  });
+  );
 };

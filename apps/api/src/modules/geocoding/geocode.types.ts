@@ -1,5 +1,5 @@
 import type { z } from "@repo/contracts";
 
-import type { geocodeQuerySchema } from "./geocode.schema.js";
+import type { geocodeQuery as geocodeQuerySchema } from "@repo/contracts";
 
 export type GeocodeQuery = z.infer<typeof geocodeQuerySchema>;

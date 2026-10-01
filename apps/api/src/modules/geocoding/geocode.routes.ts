@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 
 import { requireAuth } from "../../plugins/session.js";
-import { geocodeQuerySchema } from "./geocode.schema.js";
+import { geocodeQuery as geocodeQuerySchema } from "@repo/contracts";
 import { GeocodeUpstreamError, geocodeService } from "./geocode.service.js";
 
 export const geocodeRoutes: FastifyPluginAsync = async (app) => {
