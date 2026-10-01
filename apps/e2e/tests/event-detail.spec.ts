@@ -27,19 +27,22 @@ test.describe("event detail page", () => {
 
     test.afterEach(async ({ request }) => {
         const response = await request.delete(`${API_URL}/api/events/${eventId}`);
-        expect([200, 204, 404]).toContain(response.status());
+        expect(response.status()).toBe(204);
     });
 
     test("opens from the list and shows the event", async ({ page }) => {
         await page.goto("/");
+        const meResponse = page.waitForResponse((r) => r.url().endsWith("/api/auth/me"));
         await page.getByRole("link", { name, exact: true }).click();
 
         await expect(page).toHaveURL(new RegExp(`/events/${eventId}$`));
+        expect((await meResponse).status()).toBe(200);
         await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
         await expect(page.getByText(/^Organized by /)).toBeVisible();
         await expect(page.getByText("Nieuwmarkt 4")).toBeVisible();
         await expect(page.locator(`iframe[title="Map of ${VENUE.label}"]`)).toBeVisible();
-        await expect(page.getByRole("link", { name: "Edit" })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Edit", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
     });
 
     test("is rendered on the server", async ({ request, baseURL }) => {
@@ -53,9 +56,12 @@ test.describe("event detail page", () => {
         const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
         const page = await context.newPage();
 
+        const meResponse = page.waitForResponse((r) => r.url().endsWith("/api/auth/me"));
         await page.goto(`${baseURL}/events/${eventId}`);
         await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-        await expect(page.getByRole("link", { name: "Edit" })).toBeHidden();
+        expect((await meResponse).status()).toBe(401);
+        await expect(page.getByRole("link", { name: "Edit", exact: true })).toBeHidden();
+        await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeHidden();
 
         await context.close();
     });
