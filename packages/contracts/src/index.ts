@@ -9,11 +9,11 @@ import { z } from "zod";
 
 // ---------------------------------------------------------------- addresses
 
-export const addressParamsSchema = z.object({
-  id: z.string().min(1),
-});
-
-/** line1, city and country are NOT NULL in the database. */
+/**
+ * An event's venue. It has no endpoints of its own: it is written only as the
+ * `address` field of an event payload. line1, city and country are NOT NULL
+ * in the database.
+ */
 export const createAddressInput = z.object({
   label: z.string().max(255).nullish(),
   line1: z.string().min(1).max(255),
@@ -30,10 +30,7 @@ export const createAddressInput = z.object({
   raw: z.unknown().optional(),
 });
 
-export const updateAddressInput = createAddressInput.partial();
-
 export type CreateAddressInput = z.infer<typeof createAddressInput>;
-export type UpdateAddressInput = z.infer<typeof updateAddressInput>;
 
 // ------------------------------------------------------------------- events
 
@@ -57,8 +54,11 @@ const dateFromIso = z.iso.datetime({ offset: true }).pipe(z.coerce.date());
 const eventFields = {
   name: z.string().min(1).max(255),
   description: z.string().max(2000).nullish(),
-  /** Links to an existing Address; null detaches the venue. */
-  addressId: z.string().min(1).nullish(),
+  /**
+   * The venue, written with the event. On update: omitted leaves it as is,
+   * null deletes it, an object creates it or updates it in place.
+   */
+  address: createAddressInput.nullish(),
   imageKey: imageKeySchema.nullish(),
   startsAt: z.iso.datetime({ offset: true }).nullish(),
   endsAt: z.iso.datetime({ offset: true }).nullish(),

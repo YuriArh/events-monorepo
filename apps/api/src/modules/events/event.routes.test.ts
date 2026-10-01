@@ -1,5 +1,6 @@
 import { readdir, rm } from "node:fs/promises";
 
+import { prisma } from "@repo/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -11,11 +12,19 @@ let app: FastifyInstance;
 const STARTS_AT = "2026-10-01T18:00:00.000Z";
 const ENDS_AT = "2026-10-01T21:00:00.000Z";
 
+const VENUE = {
+    label: "Town Hall",
+    line1: "1 Civic Square",
+    city: "Amsterdam",
+    country: "NL",
+};
+
 type EventPayload = {
     id: string;
     name: string;
     description: string | null;
     addressId: string | null;
+    address: { id: string; label: string | null; city: string } | null;
     imageKey: string | null;
     startsAt: string;
     endsAt: string | null;
@@ -303,5 +312,126 @@ describe("CORS", () => {
 
         expect(response.headers["access-control-allow-methods"]).toContain(method);
         expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    });
+});
+
+describe("event venue", () => {
+    it("creates the venue with the event", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        expect(created.address).toMatchObject({ label: "Town Hall", city: "Amsterdam" });
+        expect(created.addressId).toBe(created.address?.id);
+    });
+
+    it("updates the venue in place", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json" },
+            payload: { address: { ...VENUE, city: "Rotterdam" } },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+            addressId: created.addressId,
+            address: { id: created.addressId, city: "Rotterdam" },
+        });
+        expect(await prisma.address.count()).toBe(1);
+    });
+
+    it("adds a venue to an event that had none", async () => {
+        const created = await createEvent();
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json" },
+            payload: { address: VENUE },
+        });
+
+        expect(response.json()).toMatchObject({ address: { city: "Amsterdam" } });
+    });
+
+    it("keeps the venue when address is omitted", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json" },
+            payload: { name: "Renamed" },
+        });
+
+        expect(response.json()).toMatchObject({ addressId: created.addressId });
+    });
+
+    it("deletes the venue row when address is null", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json" },
+            payload: { address: null },
+        });
+
+        expect(response.json()).toMatchObject({ addressId: null, address: null });
+        expect(await prisma.address.count()).toBe(0);
+    });
+
+    // Addresses no longer outlive their event; before this, the e2e suite had
+    // to clean up orphans by hand.
+    it("deletes the venue with the event", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        await app.inject({ method: "DELETE", url: `/api/events/${created.id}` });
+
+        expect(await prisma.address.count()).toBe(0);
+    });
+
+    it("round-trips coordinates and the raw feature", async () => {
+        const raw = { type: "Feature", properties: { osm_id: 123456 } };
+
+        const created = await createEvent({
+            address: { ...VENUE, lat: 52.3723, lon: 4.9002, osmId: "W123456", raw },
+        });
+
+        expect(created.address).toMatchObject({ lat: 52.3723, osmId: "W123456", raw });
+    });
+
+    // Prisma needs DbNull rather than null for a nullable Json column.
+    it("stores a venue with no geocoding fields", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        expect(created.address).toMatchObject({ lat: null, lon: null, osmId: null, raw: null });
+    });
+
+    it.each([
+        ["a missing line1", { line1: undefined }],
+        ["a missing city", { city: undefined }],
+        ["a missing country", { country: undefined }],
+    ])("rejects a venue with %s, reporting the nested path", async (_label, overrides) => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json" },
+            payload: { name: "Valid", address: { ...VENUE, ...overrides } },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().issues[0].path[0]).toBe("address");
+    });
+
+    it("no longer exposes /api/addresses", async () => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/addresses",
+            headers: { "content-type": "application/json" },
+            payload: VENUE,
+        });
+
+        expect(response.statusCode).toBe(404);
     });
 });

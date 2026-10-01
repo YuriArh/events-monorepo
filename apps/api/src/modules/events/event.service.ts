@@ -1,5 +1,4 @@
 import { deleteUpload } from "../../lib/uploads.js";
-import { addressRepository } from "../addresses/address.repository.js";
 import { eventRepository } from "./event.repository.js";
 import type { CreateEventInput, UpdateEventInput } from "./event.types.js";
 
@@ -10,50 +9,12 @@ export class EventNotFoundError extends Error {
   }
 }
 
-/** The payload referenced a venue that does not exist — a bad request, not a 404. */
-export class UnknownAddressError extends Error {
-  constructor(id: string) {
-    super(`Address with id "${id}" does not exist`);
-    this.name = "UnknownAddressError";
-  }
-}
-
-/** 1:1: another event already owns this address. */
-export class AddressAlreadyLinkedError extends Error {
-  constructor(id: string) {
-    super(`Address with id "${id}" is already linked to an event`);
-    this.name = "AddressAlreadyLinkedError";
-  }
-}
-
 export class InvalidEventDateRangeError extends Error {
   constructor() {
     super("endsAt must be after startsAt");
     this.name = "InvalidEventDateRangeError";
   }
 }
-
-/**
- * Checked up front so a bad reference is a clear 400 rather than the raw
- * foreign-key violation Prisma would otherwise throw.
- */
-const assertAddressExists = async (addressId: string | null | undefined) => {
-  if (!addressId) return;
-
-  if (!(await addressRepository.findById(addressId))) {
-    throw new UnknownAddressError(addressId);
-  }
-};
-
-const assertAddressFree = async (addressId: string | null | undefined, exceptEventId?: string) => {
-  if (!addressId) return;
-
-  const occupant = await eventRepository.findByAddressId(addressId);
-
-  if (occupant && occupant.id !== exceptEventId) {
-    throw new AddressAlreadyLinkedError(addressId);
-  }
-};
 
 /**
  * Both dates are optional, so there is only something to compare when each is
@@ -89,8 +50,6 @@ export const eventService = {
 
   async create(input: CreateEventInput) {
     assertDateRange(input.startsAt, input.endsAt);
-    await assertAddressExists(input.addressId);
-    await assertAddressFree(input.addressId);
 
     return eventRepository.create(input);
   },
@@ -101,10 +60,8 @@ export const eventService = {
     // Checked against the merged result: a payload carrying only one of the two
     // dates can still be invalid once combined with what is already stored.
     assertDateRange(merge(input.startsAt, existing.startsAt), merge(input.endsAt, existing.endsAt));
-    await assertAddressExists(input.addressId);
-    await assertAddressFree(input.addressId, id);
 
-    const updated = await eventRepository.update(id, input);
+    const updated = await eventRepository.update(id, input, existing.addressId !== null);
 
     if (
       input.imageKey !== undefined &&
@@ -120,7 +77,7 @@ export const eventService = {
   async remove(id: string) {
     const existing = await this.getById(id);
 
-    await eventRepository.delete(id);
+    await eventRepository.delete(id, existing.addressId);
     await deleteUpload(existing.imageKey);
   },
 };
