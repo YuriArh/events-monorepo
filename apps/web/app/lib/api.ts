@@ -24,6 +24,9 @@ export class ApiError extends Error {
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
         ...init,
+        // The session is an httpOnly cookie set by the API's origin; without
+        // this the browser neither sends nor stores it on cross-origin calls.
+        credentials: "include",
         headers: {
             // Only on requests that actually carry a JSON body. Sending it with an
             // empty body makes Fastify reject the request while parsing, and setting

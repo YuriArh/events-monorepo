@@ -28,6 +28,8 @@ export type EventRecord = {
     name: string;
     description: string | null;
     addressId: string | null;
+    /** Null for events created before accounts existed — admin-only to change. */
+    organizerId: string | null;
     imageKey: string | null;
     startsAt: string | null;
     endsAt: string | null;
