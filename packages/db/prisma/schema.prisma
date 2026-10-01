@@ -6,6 +6,66 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum AuthTokenType {
+  PASSWORD_RESET
+  EMAIL_VERIFY
+}
+
+model User {
+  id              String    @id @default(cuid())
+  /// Always lowercase, trimmed. The service normalizes this.
+  email           String    @unique
+  /// argon2id hash. Never included in API responses.
+  passwordHash    String
+  name            String?
+  /// Filename in uploads, not a URL (same as Event.imageKey).
+  imageKey        String?
+  role            UserRole  @default(USER)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sessions        Session[]
+  authTokens      AuthToken[]
+  /// Events this user organizes.
+  organizedEvents Event[]
+}
+
+/// Server session. The cookie stores the raw token; this table stores only its sha256.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// One-shot tokens for password reset and email verification.
+model AuthToken {
+  id        String        @id @default(cuid())
+  tokenHash String        @unique
+  type      AuthTokenType
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+}
+
+// ───────── Events and addresses ─────────
 
 model Event {
   id          String    @id @default(cuid())
@@ -22,12 +82,15 @@ model Event {
   addressId String?  @unique
   address   Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
 
+  /// Organizer. Nullable for events created before ownership existed;
+  /// deleting the user leaves the event (onDelete: SetNull).
+  organizerId String?
+  organizer   User?   @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+
   @@index([startsAt])
+  @@index([organizerId])
 }
 
-/// Optional 1:1 with Event. The foreign key lives on Event (`addressId`), not
-/// here — so an address can exist before it is linked, and deleting it only
-/// nulls that event's `addressId` (onDelete: SetNull).
 model Address {
   id         String  @id @default(cuid())
   label      String?
@@ -52,3 +115,4 @@ model Address {
 
   @@index([city])
 }
+
