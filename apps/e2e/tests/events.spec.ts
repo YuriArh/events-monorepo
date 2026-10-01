@@ -175,7 +175,8 @@ async function sweepLeftoverEvents(request: APIRequestContext) {
     const response = await request.get(`${API_URL}/api/events`);
     const events: Array<{ id: string; name: string }> = await response.json();
 
-    // Deleting an event deletes its venue too, so there is nothing else to clean.
+    // Deleting an event deletes its venue too. Events of other (earlier-run)
+    // users answer 403; their own teardown removed them already.
     for (const event of events.filter((candidate) => candidate.name.startsWith("E2E event"))) {
         await request.delete(`${API_URL}/api/events/${event.id}`);
     }

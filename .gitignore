@@ -39,3 +39,6 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Playwright signed-in storage state (e2e)
+apps/e2e/playwright/.auth/

@@ -510,8 +510,9 @@ Per `docs/testing-conventions.md`: integration first, against `eventapp_test`.
 - Existing specs sign in via a Playwright setup project and reuse its storage
   state, so each spec doesn't repeat the login UI.
 - Cleanup: users are created with unique emails and removed through
-  `DELETE /api/users/me`; the `beforeAll` sweep pattern from the events spec
-  extends to users with the e2e email prefix.
+  `DELETE /api/users/me`; the teardown project deletes the run's events and
+  then its user; a run killed before teardown leaves one uniquely-named
+  `e2e-*` user behind.
 
 ## Delivery order
 

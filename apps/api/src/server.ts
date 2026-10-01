@@ -1,6 +1,9 @@
 import { buildApp } from "./app.js";
 
-const app = buildApp();
+// RATE_LIMITS=off is for the e2e suite, which registers users on every run
+// and would otherwise hit the 5-per-15-minutes sign-up limit. Never set it in
+// production.
+const app = buildApp({ rateLimits: process.env.RATE_LIMITS !== "off" });
 
 const start = async () => {
   try {
