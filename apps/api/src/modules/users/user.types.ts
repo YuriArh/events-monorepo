@@ -1,8 +1,9 @@
 import type { z } from "@repo/contracts";
 
-import type { changePasswordSchema } from "../auth/auth.schema.js";
-import type { updateProfileSchema } from "./user.schema.js";
-
+import type {
+  changePasswordInput as changePasswordSchema,
+  updateProfileInput as updateProfileSchema,
+} from "@repo/contracts";
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
-export type { PublicUser } from "./user.repository.js";
+export type { PublicUser } from "../users/user.repository.js";

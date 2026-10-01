@@ -1,16 +1,22 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 
-import { type AuthRateLimitName, rateLimitOption } from "../../lib/rate-limits.js";
-import { clearSessionCookie, setSessionCookie } from "../../lib/session-cookie.js";
+import {
+  type AuthRateLimitName,
+  rateLimitOption,
+} from "../../lib/rate-limits.js";
+import {
+  clearSessionCookie,
+  setSessionCookie,
+} from "../../lib/session-cookie.js";
 import { currentUser, requireAuth } from "../../plugins/session.js";
 import {
-  changePasswordSchema,
-  forgotPasswordSchema,
-  loginSchema,
-  registerSchema,
-  resetPasswordSchema,
-  verifyEmailSchema,
-} from "./auth.schema.js";
+  changePasswordInput as changePasswordSchema,
+  forgotPasswordInput as forgotPasswordSchema,
+  loginInput as loginSchema,
+  registerInput as registerSchema,
+  resetPasswordInput as resetPasswordSchema,
+  verifyEmailInput as verifyEmailSchema,
+} from "@repo/contracts";
 import {
   EmailTakenError,
   InvalidCredentialsError,
@@ -42,7 +48,8 @@ const replyForDomainError = (error: unknown, reply: FastifyReply) => {
 };
 
 /** Only the error's name is logged: messages from providers may echo addresses or links. */
-const errorName = (error: unknown) => (error instanceof Error ? error.name : "unknown");
+const errorName = (error: unknown) =>
+  error instanceof Error ? error.name : "unknown";
 
 const sessionMeta = (request: FastifyRequest): SessionMeta => ({
   userAgent: request.headers["user-agent"] ?? null,
@@ -59,10 +66,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const { user, session, mailError } = await authService.register(
         input,
         sessionMeta(request),
-        app.mailer,
+        app.mailer
       );
 
-      if (mailError) request.log.error({ err: errorName(mailError) }, "verification mail failed");
+      if (mailError)
+        request.log.error(
+          { err: errorName(mailError) },
+          "verification mail failed"
+        );
       setSessionCookie(reply, session.token, session.expiresAt);
 
       return reply.status(201).send({ user });
@@ -75,7 +86,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const input = loginSchema.parse(request.body);
 
     try {
-      const { user, session } = await authService.login(input, sessionMeta(request));
+      const { user, session } = await authService.login(
+        input,
+        sessionMeta(request)
+      );
       setSessionCookie(reply, session.token, session.expiresAt);
 
       return { user };
@@ -91,54 +105,79 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(204).send();
   });
 
-  app.post("/logout-all", { preHandler: requireAuth }, async (request, reply) => {
-    await authService.logoutAll(currentUser(request).id);
-    clearSessionCookie(reply);
-
-    return reply.status(204).send();
-  });
-
-  app.post("/password/change", { preHandler: requireAuth, ...limited("changePassword") }, async (request, reply) => {
-    const input = changePasswordSchema.parse(request.body);
-
-    try {
-      // sessionId is set whenever request.user is, which requireAuth guarantees.
-      await userService.changePassword(currentUser(request).id, request.sessionId as string, input);
+  app.post(
+    "/logout-all",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      await authService.logoutAll(currentUser(request).id);
+      clearSessionCookie(reply);
 
       return reply.status(204).send();
-    } catch (error) {
-      return replyForDomainError(error, reply);
     }
-  });
+  );
+
+  app.post(
+    "/password/change",
+    { preHandler: requireAuth, ...limited("changePassword") },
+    async (request, reply) => {
+      const input = changePasswordSchema.parse(request.body);
+
+      try {
+        // sessionId is set whenever request.user is, which requireAuth guarantees.
+        await userService.changePassword(
+          currentUser(request).id,
+          request.sessionId as string,
+          input
+        );
+
+        return reply.status(204).send();
+      } catch (error) {
+        return replyForDomainError(error, reply);
+      }
+    }
+  );
 
   app.get("/me", { preHandler: requireAuth }, async (request) => {
     return { user: request.user };
   });
 
   // Tokens travel in the body, so they never land in API access logs.
-  app.post("/password/forgot", limited("forgotPassword"), async (request, reply) => {
-    const { email } = forgotPasswordSchema.parse(request.body);
+  app.post(
+    "/password/forgot",
+    limited("forgotPassword"),
+    async (request, reply) => {
+      const { email } = forgotPasswordSchema.parse(request.body);
 
-    // Neither awaited nor allowed to fail the request: timing and errors must not
-    // reveal whether the account exists, so the answer is always an immediate 204.
-    void authService
-      .requestPasswordReset(email, app.mailer)
-      .catch((error: unknown) => request.log.error({ err: errorName(error) }, "password reset mail failed"));
-
-    return reply.status(204).send();
-  });
-
-  app.post("/password/reset", limited("resetPassword"), async (request, reply) => {
-    const { token, newPassword } = resetPasswordSchema.parse(request.body);
-
-    try {
-      await authService.resetPassword(token, newPassword);
+      // Neither awaited nor allowed to fail the request: timing and errors must not
+      // reveal whether the account exists, so the answer is always an immediate 204.
+      void authService
+        .requestPasswordReset(email, app.mailer)
+        .catch((error: unknown) =>
+          request.log.error(
+            { err: errorName(error) },
+            "password reset mail failed"
+          )
+        );
 
       return reply.status(204).send();
-    } catch (error) {
-      return replyForDomainError(error, reply);
     }
-  });
+  );
+
+  app.post(
+    "/password/reset",
+    limited("resetPassword"),
+    async (request, reply) => {
+      const { token, newPassword } = resetPasswordSchema.parse(request.body);
+
+      try {
+        await authService.resetPassword(token, newPassword);
+
+        return reply.status(204).send();
+      } catch (error) {
+        return replyForDomainError(error, reply);
+      }
+    }
+  );
 
   app.post("/email/verify", limited("verifyEmail"), async (request, reply) => {
     const { token } = verifyEmailSchema.parse(request.body);
@@ -152,9 +191,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/email/resend", { preHandler: requireAuth, ...limited("resendVerification") }, async (request, reply) => {
-    await authService.resendVerification(currentUser(request), app.mailer);
+  app.post(
+    "/email/resend",
+    { preHandler: requireAuth, ...limited("resendVerification") },
+    async (request, reply) => {
+      await authService.resendVerification(currentUser(request), app.mailer);
 
-    return reply.status(204).send();
-  });
+      return reply.status(204).send();
+    }
+  );
 };
