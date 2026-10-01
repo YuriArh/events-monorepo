@@ -241,7 +241,7 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
     const listed: Array<{ id: string; name: string; addressId: string | null }> =
         await (await page.request.get(`${API_URL}/api/events`)).json();
     const createdEvent = listed.find((candidate) => candidate.name === renamed);
-    expect(createdEvent?.addressId).not.toBeNull();
+    expect(createdEvent?.addressId).toEqual(expect.any(String));
 
     await test.step("delete", async () => {
         await page.getByRole("button", { name: `Delete ${renamed}` }).click();

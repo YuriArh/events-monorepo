@@ -155,12 +155,18 @@ Self-built, email + password. Full design: `docs/superpowers/specs/2026-10-01-au
 - **Rate limits** (`lib/rate-limits.ts`) are in memory, per process, and run
   at `preHandler` so keys can use the body or `request.user`. They cover
   register, login, password forgot/reset, email verify/resend, password change
-  and `DELETE /api/users/me` (password re-check). Keys use `clientKey(ip)`,
-  which groups IPv6 addresses by /64. Behind a reverse proxy, configure
-  Fastify's `trustProxy`, or every client shares one IP bucket.
+  and `DELETE /api/users/me` (password re-check). Login keys on
+  `clientKey(ip)` plus the email, and the signed-in routes key on the user
+  with `clientKey(ip)` as the fallback; `clientKey` groups IPv6 addresses by
+  /64. The IP-only routes use the plugin's default key, which also groups IPv6
+  by /64. Behind a reverse proxy, configure Fastify's `trustProxy`, or every
+  client shares one IP bucket.
 - **Event images**: the service rejects (409) an `imageKey` that another event
   already uses, so one user can't make the server delete another user's
   uploaded file. An uploaded file not yet attached to an event has no owner.
+  `imageKeySchema` accepts only the exact lowercase shape `buildImageKey`
+  generates, so an upper-case variant (the same file on a case-insensitive
+  filesystem) can't slip past that exact-match check.
 
 ## Error handling
 
@@ -250,6 +256,21 @@ development; production needs object storage.
 ("A real Mailer must be configured…") until a real `Mailer` is wired into
 `server.ts`. That is intentional: a deployment must never log password-reset
 links to the console.
+
+### Deploying
+
+- **Same site.** The web app and API must share a registrable domain (e.g.
+  `app.example.com` + `api.example.com`). The session cookie is
+  `SameSite=Lax`, so on a different site (e.g. `example-web.com` +
+  `example-api.com`) the browser does not send it on the web app's
+  credentialed fetches, and every request looks signed out.
+- **`WEB_ORIGIN`** must be the exact public origin of the web app (`https://…`):
+  it drives CORS, the Origin check, email links and the `Secure` cookie flag.
+- **`NODE_ENV`** should be `production`. Unset also fails closed, but
+  `production` is what other tooling (Prisma, the seed guard) recognises.
+- **`trustProxy`.** Behind a reverse proxy or load balancer, configure
+  Fastify's `trustProxy` so `request.ip` is the client, not the proxy;
+  otherwise every client shares one rate-limit bucket.
 
 ## CORS
 
