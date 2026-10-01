@@ -2,12 +2,16 @@ import { readdir, rm } from "node:fs/promises";
 
 import { prisma } from "@repo/db";
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { buildApp } from "../../app.js";
 import { UPLOADS_DIR } from "../../lib/uploads.js";
+import { makeAdmin, signUp } from "../../test/auth.js";
 
 let app: FastifyInstance;
+
+/** A signed-in user's session cookie; a fresh user per test (tables are truncated). */
+let cookie: string;
 
 const STARTS_AT = "2026-10-01T18:00:00.000Z";
 const ENDS_AT = "2026-10-01T21:00:00.000Z";
@@ -28,13 +32,14 @@ type EventPayload = {
     imageKey: string | null;
     startsAt: string;
     endsAt: string | null;
+    organizerId: string | null;
 };
 
 const createEvent = async (overrides: Record<string, unknown> = {}) => {
     const response = await app.inject({
         method: "POST",
         url: "/api/events",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", cookie },
         payload: { name: "Team offsite", startsAt: STARTS_AT, ...overrides },
     });
 
@@ -61,7 +66,7 @@ const uploadFile = async (content: Buffer, { filename = "photo.png", contentType
     return app.inject({
         method: "POST",
         url: "/api/events/upload",
-        headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+        headers: { "content-type": `multipart/form-data; boundary=${boundary}`, cookie },
         payload,
     });
 };
@@ -69,6 +74,10 @@ const uploadFile = async (content: Buffer, { filename = "photo.png", contentType
 beforeAll(async () => {
     app = buildApp();
     await app.ready();
+});
+
+beforeEach(async () => {
+    ({ cookie } = await signUp(app));
 });
 
 afterAll(async () => {
@@ -99,7 +108,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: {
                 name: "Team offsite",
                 description: "Two days offsite",
@@ -127,7 +136,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Backwards", startsAt: ENDS_AT, endsAt: STARTS_AT },
         });
 
@@ -141,7 +150,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Open ended", endsAt: ENDS_AT },
         });
 
@@ -157,7 +166,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Valid", startsAt: STARTS_AT, ...overrides },
         });
 
@@ -173,7 +182,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { description: "after" },
         });
 
@@ -189,7 +198,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { endsAt: STARTS_AT },
         });
 
@@ -204,7 +213,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { startsAt: null, endsAt: STARTS_AT },
         });
 
@@ -215,7 +224,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: "/api/events/missing",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "After" },
         });
 
@@ -227,7 +236,7 @@ describe("DELETE /api/events/:id", () => {
     it("deletes the event", async () => {
         const created = await createEvent();
 
-        const response = await app.inject({ method: "DELETE", url: `/api/events/${created.id}` });
+        const response = await app.inject({ method: "DELETE", url: `/api/events/${created.id}`, headers: { cookie } });
 
         expect(response.statusCode).toBe(204);
 
@@ -236,7 +245,7 @@ describe("DELETE /api/events/:id", () => {
     });
 
     it("returns 404 for an unknown id", async () => {
-        const response = await app.inject({ method: "DELETE", url: "/api/events/missing" });
+        const response = await app.inject({ method: "DELETE", url: "/api/events/missing", headers: { cookie } });
 
         expect(response.statusCode).toBe(404);
     });
@@ -249,7 +258,7 @@ describe("DELETE /api/events/:id", () => {
         const response = await app.inject({
             method: "DELETE",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
         });
 
         expect(response.statusCode).not.toBe(500);
@@ -259,7 +268,7 @@ describe("DELETE /api/events/:id", () => {
         const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
         const created = await createEvent({ imageKey });
 
-        await app.inject({ method: "DELETE", url: `/api/events/${created.id}` });
+        await app.inject({ method: "DELETE", url: `/api/events/${created.id}`, headers: { cookie } });
 
         await expect(readdir(UPLOADS_DIR)).resolves.not.toContain(imageKey);
     });
@@ -343,7 +352,7 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { address: { ...VENUE, city: "Rotterdam" } },
         });
 
@@ -361,7 +370,7 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { address: VENUE },
         });
 
@@ -374,7 +383,7 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Renamed" },
         });
 
@@ -387,7 +396,7 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { address: null },
         });
 
@@ -400,7 +409,7 @@ describe("event venue", () => {
     it("deletes the venue with the event", async () => {
         const created = await createEvent({ address: VENUE });
 
-        await app.inject({ method: "DELETE", url: `/api/events/${created.id}` });
+        await app.inject({ method: "DELETE", url: `/api/events/${created.id}`, headers: { cookie } });
 
         expect(await prisma.address.count()).toBe(0);
     });
@@ -430,7 +439,7 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Valid", address: { ...VENUE, ...overrides } },
         });
 
@@ -455,7 +464,7 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { address: VENUE },
         });
 
@@ -480,7 +489,7 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { address: null },
         });
 
@@ -492,10 +501,101 @@ describe("event venue", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/addresses",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: VENUE,
         });
 
         expect(response.statusCode).toBe(404);
+    });
+});
+
+describe("ownership", () => {
+    const patch = (id: string, sessionCookie?: string) =>
+        app.inject({
+            method: "PATCH",
+            url: `/api/events/${id}`,
+            headers: { "content-type": "application/json", ...(sessionCookie ? { cookie: sessionCookie } : {}) },
+            payload: { name: "Hijacked", address: VENUE },
+        });
+
+    it("requires a session to create", async () => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json" },
+            payload: { name: "Anonymous" },
+        });
+
+        expect(response.statusCode).toBe(401);
+    });
+
+    it("requires a session to upload", async () => {
+        const response = await app.inject({ method: "POST", url: "/api/events/upload" });
+
+        expect(response.statusCode).toBe(401);
+    });
+
+    it("makes the creator the organizer, ignoring one in the body", async () => {
+        const other = await signUp(app);
+
+        const created = await createEvent({ organizerId: other.user.id });
+        const self = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+
+        expect(created).toMatchObject({ organizerId: self.json().user.id });
+    });
+
+    it("forbids another user from editing, and leaves the event and venue as they were", async () => {
+        const created = await createEvent({ address: VENUE });
+        const stranger = await signUp(app);
+
+        const response = await patch(created.id, stranger.cookie);
+
+        expect(response.statusCode).toBe(403);
+        const after = await app.inject({ method: "GET", url: `/api/events/${created.id}` });
+        expect(after.json()).toMatchObject({ name: "Team offsite", address: { city: "Amsterdam" } });
+    });
+
+    it("forbids another user from deleting", async () => {
+        const created = await createEvent();
+        const stranger = await signUp(app);
+
+        const response = await app.inject({
+            method: "DELETE",
+            url: `/api/events/${created.id}`,
+            headers: { cookie: stranger.cookie },
+        });
+
+        expect(response.statusCode).toBe(403);
+    });
+
+    it("lets an admin edit and delete anyone's event", async () => {
+        const created = await createEvent();
+        const admin = await signUp(app);
+        await makeAdmin(admin.user.id);
+
+        expect((await patch(created.id, admin.cookie)).statusCode).toBe(200);
+        const deletion = await app.inject({
+            method: "DELETE",
+            url: `/api/events/${created.id}`,
+            headers: { cookie: admin.cookie },
+        });
+        expect(deletion.statusCode).toBe(204);
+    });
+
+    it("lets only an admin edit an event that has no organizer", async () => {
+        const created = await createEvent();
+        await prisma.event.update({ where: { id: created.id }, data: { organizerId: null } });
+
+        expect((await patch(created.id, cookie)).statusCode).toBe(403);
+
+        const admin = await signUp(app);
+        await makeAdmin(admin.user.id);
+        expect((await patch(created.id, admin.cookie)).statusCode).toBe(200);
+    });
+
+    it("is 401, not 403, when anonymous", async () => {
+        const created = await createEvent();
+
+        expect((await patch(created.id)).statusCode).toBe(401);
     });
 });

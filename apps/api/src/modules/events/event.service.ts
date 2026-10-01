@@ -1,3 +1,5 @@
+import type { UserRole } from "@repo/db";
+
 import { deleteUpload } from "../../lib/uploads.js";
 import { eventRepository } from "./event.repository.js";
 import type { CreateEventInput, UpdateEventInput } from "./event.types.js";
@@ -15,6 +17,26 @@ export class InvalidEventDateRangeError extends Error {
     this.name = "InvalidEventDateRangeError";
   }
 }
+
+export class ForbiddenError extends Error {
+  constructor() {
+    super("You can only change events you organize");
+    this.name = "ForbiddenError";
+  }
+}
+
+type Actor = { id: string; role: UserRole };
+
+/**
+ * The organizer or an admin. Ownerless events (created before accounts
+ * existed) are admin-only. Kept here, not in routes, so no route can skip it.
+ */
+export const canModify = (event: { organizerId: string | null }, actor: Actor) =>
+  actor.role === "ADMIN" || (event.organizerId !== null && event.organizerId === actor.id);
+
+const assertCanModify = (event: { organizerId: string | null }, actor: Actor) => {
+  if (!canModify(event, actor)) throw new ForbiddenError();
+};
 
 /**
  * Both dates are optional, so there is only something to compare when each is
@@ -48,14 +70,15 @@ export const eventService = {
     return event;
   },
 
-  async create(input: CreateEventInput) {
+  async create(input: CreateEventInput, actor: Actor) {
     assertDateRange(input.startsAt, input.endsAt);
 
-    return eventRepository.create(input);
+    return eventRepository.create(input, actor.id);
   },
 
-  async update(id: string, input: UpdateEventInput) {
+  async update(id: string, input: UpdateEventInput, actor: Actor) {
     const existing = await this.getById(id);
+    assertCanModify(existing, actor);
 
     // Checked against the merged result: a payload carrying only one of the two
     // dates can still be invalid once combined with what is already stored.
@@ -74,8 +97,9 @@ export const eventService = {
     return updated;
   },
 
-  async remove(id: string) {
+  async remove(id: string, actor: Actor) {
     const existing = await this.getById(id);
+    assertCanModify(existing, actor);
 
     await eventRepository.delete(id, existing.addressId);
     await deleteUpload(existing.imageKey);

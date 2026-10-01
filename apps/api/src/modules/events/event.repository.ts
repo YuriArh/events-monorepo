@@ -48,9 +48,14 @@ export const eventRepository = {
     return prisma.event.findUnique({ where: { id }, include: withAddress });
   },
 
-  create({ address, ...data }: CreateEventInput) {
+  /** organizerId comes from the session, never from the request body. */
+  create({ address, ...data }: CreateEventInput, organizerId: string) {
     return prisma.event.create({
-      data: { ...data, address: address ? { create: toAddressData(address) } : undefined },
+      data: {
+        ...data,
+        organizer: { connect: { id: organizerId } },
+        address: address ? { create: toAddressData(address) } : undefined,
+      },
       include: withAddress,
     });
   },

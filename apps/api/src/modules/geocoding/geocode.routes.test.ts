@@ -2,9 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "../../app.js";
+import { signUp } from "../../test/auth.js";
 import { geocodeService } from "./geocode.service.js";
 
 let app: FastifyInstance;
+let cookie: string;
 
 const fetchMock = vi.fn();
 
@@ -29,7 +31,8 @@ const photonResponse = (features: unknown[]) =>
         headers: { "content-type": "application/json" },
     });
 
-const search = (query: string) => app.inject({ method: "GET", url: `/api/geocode?${query}` });
+const search = (query: string) =>
+    app.inject({ method: "GET", url: `/api/geocode?${query}`, headers: { cookie } });
 
 beforeAll(async () => {
     app = buildApp();
@@ -40,7 +43,8 @@ afterAll(async () => {
     await app.close();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+    ({ cookie } = await signUp(app));
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     // The cache is process-wide; without this a test sees the previous one's result.
@@ -126,5 +130,14 @@ describe("GET /api/geocode", () => {
 
         expect((await search("q=Nieuwmarkt")).statusCode).toBe(503);
         expect((await search("q=Nieuwmarkt")).statusCode).toBe(200);
+    });
+});
+
+describe("authentication", () => {
+    it("is only for signed-in users", async () => {
+        const response = await app.inject({ method: "GET", url: "/api/geocode?q=Nieuwmarkt" });
+
+        expect(response.statusCode).toBe(401);
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 });

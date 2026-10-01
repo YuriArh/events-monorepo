@@ -11,6 +11,7 @@ import {
   resolveUploadPath,
   UnsupportedImageTypeError,
 } from "../../lib/uploads.js";
+import { currentUser, requireAuth } from "../../plugins/session.js";
 import {
   createEventSchema,
   eventParamsSchema,
@@ -18,6 +19,7 @@ import {
 } from "./event.schema.js";
 import {
   EventNotFoundError,
+  ForbiddenError,
   InvalidEventDateRangeError,
   eventService,
 } from "./event.service.js";
@@ -30,6 +32,10 @@ const replyForDomainError = (error: unknown, reply: FastifyReply) => {
 
   if (error instanceof InvalidEventDateRangeError) {
     return reply.status(400).send({ message: error.message });
+  }
+
+  if (error instanceof ForbiddenError) {
+    return reply.status(403).send({ message: error.message });
   }
 
   throw error;
@@ -50,32 +56,32 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/", async (request, reply) => {
+  app.post("/", { preHandler: requireAuth }, async (request, reply) => {
     const input = createEventSchema.parse(request.body);
 
     try {
-      return reply.status(201).send(await eventService.create(input));
+      return reply.status(201).send(await eventService.create(input, currentUser(request)));
     } catch (error) {
       return replyForDomainError(error, reply);
     }
   });
 
-  app.patch("/:id", async (request, reply) => {
+  app.patch("/:id", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = eventParamsSchema.parse(request.params);
     const input = updateEventSchema.parse(request.body);
 
     try {
-      return await eventService.update(id, input);
+      return await eventService.update(id, input, currentUser(request));
     } catch (error) {
       return replyForDomainError(error, reply);
     }
   });
 
-  app.delete("/:id", async (request, reply) => {
+  app.delete("/:id", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = eventParamsSchema.parse(request.params);
 
     try {
-      await eventService.remove(id);
+      await eventService.remove(id, currentUser(request));
 
       return reply.status(204).send();
     } catch (error) {
@@ -85,7 +91,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
 
   // Uploads are their own endpoint so creating an event stays a plain JSON
   // request; the client uploads first and submits the returned key.
-  app.post("/upload", async (request, reply) => {
+  app.post("/upload", { preHandler: requireAuth }, async (request, reply) => {
     const file = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
 
     if (!file) {

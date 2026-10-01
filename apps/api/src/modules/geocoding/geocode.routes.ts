@@ -1,10 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 
+import { requireAuth } from "../../plugins/session.js";
 import { geocodeQuerySchema } from "./geocode.schema.js";
 import { GeocodeUpstreamError, geocodeService } from "./geocode.service.js";
 
 export const geocodeRoutes: FastifyPluginAsync = async (app) => {
-  app.get("/", async (request, reply) => {
+  // Only the event form uses this, and it requires a session; anonymous
+  // traffic would otherwise spend the shared Photon quota.
+  app.get("/", { preHandler: requireAuth }, async (request, reply) => {
     const { q, limit } = geocodeQuerySchema.parse(request.query);
 
     try {
