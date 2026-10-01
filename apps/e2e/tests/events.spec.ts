@@ -173,16 +173,11 @@ async function pickDateTime(
  */
 async function sweepLeftoverEvents(request: APIRequestContext) {
     const response = await request.get(`${API_URL}/api/events`);
-    const events: Array<{ id: string; name: string; addressId: string | null }> = await response.json();
-    const leftoverEvents = events.filter((candidate) => candidate.name.startsWith("E2E event"));
+    const events: Array<{ id: string; name: string }> = await response.json();
 
-    for (const event of leftoverEvents) {
+    // Deleting an event deletes its venue too, so there is nothing else to clean.
+    for (const event of events.filter((candidate) => candidate.name.startsWith("E2E event"))) {
         await request.delete(`${API_URL}/api/events/${event.id}`);
-    }
-    for (const leftoverAddressId of leftoverEvents
-        .map((event) => event.addressId)
-        .filter((candidate): candidate is string => candidate !== null)) {
-        await request.delete(`${API_URL}/api/addresses/${leftoverAddressId}`);
     }
 }
 
@@ -190,7 +185,7 @@ test.beforeAll(async ({ request }) => {
     await sweepLeftoverEvents(request);
 });
 
-test("creates an event with every field, then edits and deletes it", async ({ page, request }) => {
+test("creates an event with every field, then edits and deletes it", async ({ page }) => {
     const name = uniqueName("E2E event");
     const renamed = `${name} (edited)`;
 
@@ -222,15 +217,6 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
 
-    // Capture the address id created for this event now, while the event
-    // still exists: the "delete" step below removes the event through the
-    // UI, and deleting an Event does not delete its Address (the FK nulls
-    // the other way around). Editing the name doesn't change the venue, so
-    // this id stays valid through the rest of the test.
-    const createdEvents: Array<{ id: string; name: string; addressId: string | null }> =
-        await (await request.get(`${API_URL}/api/events`)).json();
-    const addressId = createdEvents.find((candidate) => candidate.name === name)?.addressId ?? null;
-
     await test.step("edit", async () => {
         // Same as "New Event" above: the row's edit control is a navigation link.
         await page.getByRole("link", { name: `Edit ${name}` }).click();
@@ -249,19 +235,17 @@ test("creates an event with every field, then edits and deletes it", async ({ pa
         await expect(page.getByRole("cell", { name: renamed, exact: true })).toBeVisible();
     });
 
+    const listed: Array<{ id: string; name: string; addressId: string | null }> =
+        await (await page.request.get(`${API_URL}/api/events`)).json();
+    const createdEvent = listed.find((candidate) => candidate.name === renamed);
+    expect(createdEvent?.addressId).not.toBeNull();
+
     await test.step("delete", async () => {
         await page.getByRole("button", { name: `Delete ${renamed}` }).click();
         await page.getByRole("button", { name: "Delete", exact: true }).click();
 
         await expect(page.getByRole("cell", { name: renamed, exact: true })).toBeHidden();
     });
-
-    // The UI delete above only removes the Event row, leaving this test's
-    // Address orphaned. Remove it via the id captured right after creation,
-    // so this cleanup never touches a developer's own address data.
-    if (addressId !== null) {
-        await request.delete(`${API_URL}/api/addresses/${addressId}`);
-    }
 });
 
 test("blocks submitting without a name", async ({ page }) => {
@@ -319,16 +303,11 @@ test("keeps the event saveable when address lookup is down", async ({ page, requ
     await page.getByRole("button", { name: "Create" }).click();
     await expect(page).toHaveURL(/\/$/);
 
-    // No suggestion was ever selected (the outage never let one load), so this
-    // event has no Address to clean up — only the Event row itself.
-    const events: Array<{ id: string; name: string; addressId: string | null }> = await (
+    const events: Array<{ id: string; name: string }> = await (
         await request.get(`${API_URL}/api/events`)
     ).json();
     const created = events.find((candidate) => candidate.name === name);
     if (created) {
         await request.delete(`${API_URL}/api/events/${created.id}`);
-        if (created.addressId !== null) {
-            await request.delete(`${API_URL}/api/addresses/${created.addressId}`);
-        }
     }
 });
