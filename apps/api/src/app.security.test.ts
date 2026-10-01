@@ -30,6 +30,20 @@ describe("rate limiting", () => {
         }
 
         expect((await attempt()).statusCode).toBe(429);
+
+        const variant = await app.inject({
+            method: "POST",
+            url: "/api/auth/login",
+            payload: { email: " Victim@Example.test ", password: "guess" },
+        });
+        expect(variant.statusCode).toBe(429);
+
+        const other = await app.inject({
+            method: "POST",
+            url: "/api/auth/login",
+            payload: { email: "someone-else@example.test", password: "guess" },
+        });
+        expect(other.statusCode).toBe(401);
     });
 });
 
