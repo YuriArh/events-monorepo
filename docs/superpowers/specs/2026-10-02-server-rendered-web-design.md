@@ -120,7 +120,7 @@ return (
 | `/events/[id]/edit` | guard; prefetch detail; `notFound()`; not the organizer/admin → "Only the organizer…" rendered on the server | `EditEventForm` — `useQuery(detail)` + `useMutation` |
 | `/login`, `/register` | page; `next` read from `searchParams` and passed down (no `useSearchParams`/Suspense) | form with `useActionState(login \| register)` |
 | `/forgot-password`, `/reset-password` | page; token from `searchParams` | form with `useActionState` |
-| `/verify-email?token=` | page with a **"Confirm email" button** posting a Server Action | — (works without JS) |
+| `/verify-email?token=` | page; token from `searchParams` | **"Confirm email" button** form with `useActionState(verifyEmail)` (also works without JS) |
 | `/account` | guard | sections as forms with Server Actions; data from `useQuery(meQuery())` |
 
 `/verify-email` uses a button rather than verifying during render: tokens are
