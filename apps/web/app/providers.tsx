@@ -23,7 +23,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             defaultOptions: {
                 queries: {
                     staleTime: 30_000,
-                    retry: 1,
+                    // A 401 will not fix itself; do not retry it.
+                    retry: (failureCount, error) =>
+                        !(error instanceof ApiError && error.status === 401) && failureCount < 1,
                 },
             },
         });

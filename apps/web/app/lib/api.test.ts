@@ -17,4 +17,13 @@ describe("request", () => {
 
         expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: "include" });
     });
+
+    it("cannot be overridden by the caller", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await request("/api/anything", { credentials: "omit" });
+
+        expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: "include" });
+    });
 });

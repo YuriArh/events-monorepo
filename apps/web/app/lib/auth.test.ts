@@ -55,6 +55,11 @@ describe("safeNext", () => {
         ["//evil.example", "/"],
         ["/\\evil.example", "/"],
         ["javascript:alert(1)", "/"],
+        // The URL parser strips tab/LF/CR, so these resolve to "//evil.example".
+        ["/\t/evil.example", "/"],
+        ["/\n/evil.example", "/"],
+        ["/\r/evil.example", "/"],
+        [" //evil.example", "/"],
     ])("%s → %s", (input, expected) => {
         expect(safeNext(input)).toBe(expected);
     });

@@ -57,6 +57,7 @@ export const useMe = () => useQuery({ queryKey: meKey, queryFn: authApi.me });
  */
 export const useRequireUser = () => {
     const router = useRouter();
+    // pathname only: the query string is intentionally not preserved (useSearchParams would force a Suspense boundary on every guarded page).
     const pathname = usePathname();
     const { data: me, isPending } = useMe();
 
@@ -71,11 +72,18 @@ export const useRequireUser = () => {
 
 /**
  * Only same-site relative paths. Anything else — an absolute URL, a
- * protocol-relative "//host", a "/\host" that some browsers normalise to
- * "//host" — would turn the login page into an open redirect.
+ * protocol-relative "//host", "/\host", or "/\t/host" (the URL parser strips
+ * tab/LF/CR, leaving "//host") — would turn the login page into an open redirect.
  */
-export const safeNext = (next: string | null | undefined) =>
-    next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
+export const safeNext = (next: string | null | undefined) => {
+    if (!next?.startsWith("/")) return "/";
+    // Resolve against a dummy origin the way the browser would; anything that
+    // escapes it (//host, /\host, control-char tricks) is not a same-site path.
+    const resolved = new URL(next, "http://same.invalid");
+    return resolved.origin === "http://same.invalid"
+        ? `${resolved.pathname}${resolved.search}${resolved.hash}`
+        : "/";
+};
 
 /** Mirrors the API's `canModify`. Hides controls; the API is what enforces it. */
 export const canModifyEvent = (me: Me | null | undefined, event: { organizerId: string | null }) =>
