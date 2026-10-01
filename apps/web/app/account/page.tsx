@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { changePasswordInput, updateProfileInput } from "@repo/contracts";
@@ -81,6 +80,7 @@ function VerificationSection({ me }: { me: Me }) {
 
     return (
         <Section title="Confirm your email">
+            <FormBanner message={resend.error ? resend.error.message : null} />
             <p {...stylex.props(styles.muted, typography.sm)}>
                 {resend.isSuccess ? "Sent. Check your inbox." : "We sent you a link when you signed up."}
             </p>
@@ -150,13 +150,11 @@ function PasswordSection() {
 }
 
 function SessionsSection() {
-    const router = useRouter();
-    const queryClient = useQueryClient();
     const logoutAll = useMutation({
         mutationFn: authApi.logoutAll,
         onSuccess: () => {
-            queryClient.setQueryData(meKey, null);
-            router.push("/login");
+            // Full load: avoids the guard's redirect racing this navigation and clears the query cache.
+            window.location.assign("/login");
         },
     });
 
@@ -173,14 +171,12 @@ function SessionsSection() {
 }
 
 function DeleteSection() {
-    const router = useRouter();
-    const queryClient = useQueryClient();
     const [password, setPassword] = useState("");
     const remove = useMutation({
         mutationFn: authApi.deleteAccount,
         onSuccess: () => {
-            queryClient.setQueryData(meKey, null);
-            router.push("/");
+            // Full load: avoids the guard's redirect racing this navigation and clears the query cache.
+            window.location.assign("/");
         },
     });
 

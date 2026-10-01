@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 
 import { Button, buttonStyleProps } from "@/components/ui/button";
-import { authApi, meKey, useMe } from "@/lib/auth";
+import { authApi, useMe } from "@/lib/auth";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -32,15 +31,13 @@ const styles = stylex.create({
 });
 
 export function SiteHeader() {
-    const router = useRouter();
-    const queryClient = useQueryClient();
     const { data: me, isPending } = useMe();
 
     const logout = useMutation({
         mutationFn: authApi.logout,
         onSuccess: () => {
-            queryClient.setQueryData(meKey, null);
-            router.push("/");
+            // Full load: avoids the guarded page's redirect racing this navigation and clears the query cache.
+            window.location.assign("/");
         },
     });
 
