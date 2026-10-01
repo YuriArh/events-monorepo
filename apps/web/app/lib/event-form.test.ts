@@ -33,6 +33,7 @@ const record: EventRecord = {
     description: "Two days",
     addressId: "a1",
     organizerId: "u1",
+    organizer: null,
     imageKey: "abc.png",
     startsAt: "2026-10-01T18:00:00.000Z",
     endsAt: "2026-10-01T21:00:00.000Z",
