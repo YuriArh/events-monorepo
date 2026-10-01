@@ -1,6 +1,6 @@
 import type { CreateAddressInput, CreateEventInput } from "@repo/contracts";
 
-import { ApiError, type EventRecord } from "./events";
+import type { EventRecord } from "./events";
 import type { AddressSelection } from "./geocode";
 
 export type EventFormValues = {
@@ -82,41 +82,6 @@ export const formLevelError = (
     return undefined;
 };
 
-/**
- * `imageKey` and `addressId` are resolved by the submit sequence before this
- * runs, which is why they are passed in rather than read off the form.
- */
-export const toEventInput = (
-    values: EventFormValues,
-    resolved: { imageKey: string | null; addressId: string | null },
-): CreateEventInput => ({
-    name: values.name.trim(),
-    description: orNull(values.description),
-    // toISOString always emits a "Z" offset, which satisfies the contract's
-    // `datetime({ offset: true })` rule.
-    startsAt: values.startsAt ? values.startsAt.toISOString() : null,
-    endsAt: values.endsAt ? values.endsAt.toISOString() : null,
-    imageKey: resolved.imageKey,
-    addressId: resolved.addressId,
-});
-
-/**
- * Step 1 of the submit sequence. Uploading only on submit means an abandoned
- * form leaves nothing behind.
- */
-export const resolveImageKey = async (
-    values: EventFormValues,
-    upload: (file: File) => Promise<{ imageKey: string }>,
-): Promise<string | null> => {
-    if (!values.imageFile) {
-        return values.existingImageKey;
-    }
-
-    const { imageKey } = await upload(values.imageFile);
-
-    return imageKey;
-};
-
 export const toAddressInput = (suggestion: AddressSelection): CreateAddressInput => ({
     // A fresh Photon pick carries neither (there is no venue-name input), but
     // a selection rebuilt from a stored Address (see `toFormValues`) carries
@@ -135,51 +100,40 @@ export const toAddressInput = (suggestion: AddressSelection): CreateAddressInput
     raw: suggestion.raw,
 });
 
-type AddressCalls = {
-    create: (input: CreateAddressInput) => Promise<{ id: string }>;
-    update: (id: string, input: CreateAddressInput) => Promise<{ id: string }>;
-};
+/**
+ * `imageKey` is resolved by the upload step before this runs, which is why it
+ * is passed in rather than read off the form. The venue is embedded: null on
+ * an edit tells the API to delete it.
+ */
+export const toEventInput = (
+    values: EventFormValues,
+    resolved: { imageKey: string | null },
+): CreateEventInput => ({
+    name: values.name.trim(),
+    description: orNull(values.description),
+    // toISOString always emits a "Z" offset, which satisfies the contract's
+    // `datetime({ offset: true })` rule.
+    startsAt: values.startsAt ? values.startsAt.toISOString() : null,
+    endsAt: values.endsAt ? values.endsAt.toISOString() : null,
+    imageKey: resolved.imageKey,
+    address: values.address ? toAddressInput(values.address) : null,
+});
 
 /**
- * Step 2 of the submit sequence. Updating in place is safe because Event.addressId
- * is unique — an address belongs to exactly one event.
- *
- * The form renders a single `address` field. A server rejection of the
- * address call is re-thrown with its issue paths prefixed with "address" so
- * `issuesByField` (called by the form on the caught `ApiError`) produces keys
- * the form actually renders inline, instead of writing to dead state nothing
- * reads.
+ * Step 1 of the submit sequence. Uploading only on submit means an abandoned
+ * form leaves nothing behind.
  */
-export const resolveAddressId = async (
+export const resolveImageKey = async (
     values: EventFormValues,
-    existingAddressId: string | null,
-    api: AddressCalls,
+    upload: (file: File) => Promise<{ imageKey: string }>,
 ): Promise<string | null> => {
-    if (!values.address) {
-        return null;
+    if (!values.imageFile) {
+        return values.existingImageKey;
     }
 
-    const input = toAddressInput(values.address);
+    const { imageKey } = await upload(values.imageFile);
 
-    try {
-        if (existingAddressId) {
-            await api.update(existingAddressId, input);
-            return existingAddressId;
-        }
-
-        const created = await api.create(input);
-        return created.id;
-    } catch (error) {
-        if (error instanceof ApiError && error.issues) {
-            throw new ApiError(
-                error.message,
-                error.status,
-                error.issues.map((issue) => ({ ...issue, path: ["address", ...issue.path] })),
-            );
-        }
-
-        throw error;
-    }
+    return imageKey;
 };
 
 /** Shapes zod issues (from the client parse or a server 400) for field display. */

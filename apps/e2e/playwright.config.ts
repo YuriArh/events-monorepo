@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { STORAGE_STATE } from "./tests/support/auth.js";
+
 const WEB_URL = "http://localhost:3000";
 const API_URL = "http://localhost:4000";
 
@@ -14,12 +16,22 @@ export default defineConfig({
         baseURL: WEB_URL,
         trace: "on-first-retry",
     },
-    projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+    projects: [
+        { name: "setup", testMatch: /auth\.setup\.ts/, teardown: "teardown" },
+        { name: "teardown", testMatch: /auth\.teardown\.ts/ },
+        {
+            name: "chromium",
+            use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE },
+            dependencies: ["setup"],
+        },
+    ],
     // Reuses whatever is already running locally, and boots both apps in CI.
     // Postgres must be up first: `docker compose up -d`.
+    // A dev API you already have running is reused as-is; start it with
+    // RATE_LIMITS=off too, or repeated runs hit the sign-up limit.
     webServer: [
         {
-            command: "pnpm --filter api dev",
+            command: "RATE_LIMITS=off pnpm --filter api dev",
             url: `${API_URL}/health`,
             reuseExistingServer: !process.env.CI,
             cwd: "../..",

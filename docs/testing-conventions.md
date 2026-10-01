@@ -38,6 +38,19 @@ calculation, non-trivial invariants. A passthrough plus a not-found throw isn't.
   `@repo/db` builds its connection pool at import time.
 - `pnpm test` runs `test:db:migrate` (`prisma migrate deploy`) first, so the
   test database is always at the latest migration.
+- Signed-in requests: `signUp(app)` from `src/test/auth.ts` registers a fresh
+  user through the real endpoint and returns `{ user, cookie, email, password }`;
+  send `headers: { cookie }`. `makeAdmin(user.id)` promotes one;
+  `sessionCookieFrom(response)` extracts the cookie; `TEST_PASSWORD` is the
+  default password.
+- Build the app with `buildApp({ rateLimits: false })` — every suite signs up
+  more often than the limits allow. Only `app.security.test.ts` keeps them on.
+- Email flows: `buildApp({ mailer: new MemoryMailer() })`, then
+  `mailer.tokenFor(email)` returns the token from the latest link. Some mail is
+  sent asynchronously (forgot-password is fire-and-forget), so wait for it
+  first (`mailArrived(n)` in `auth.email.test.ts`, a `vi.waitFor` on
+  `mailer.messages`) instead of asserting right after the response.
+- `vitest.setup.ts` also truncates `AuthToken`, `Session` and `User`.
 
 The API logger is silenced when `NODE_ENV === "test"`.
 
@@ -63,18 +76,11 @@ running locally.
 - Select by role and accessible name (`getByRole("button", { name: "Save" })`),
   never by StyleX class — those hashes change every build.
 - Name fixtures uniquely per run and clean up afterwards; specs run against the
-  development database, not a dedicated one. Clean up every row a test
-  creates, not just the one it deletes through the UI — deleting an Event
-  through the app does not delete its Address (`onDelete: SetNull` only runs
-  in the Address→Event direction, nulling `Event.addressId` when an Address is
-  removed; it does nothing when the Event itself is removed). The events spec
-  captures the address id right after creation and deletes it via the API,
-  plus a `beforeAll` sweep for anything a previous, interrupted run left
-  behind. The sweep runs before any test in the file, not just at the end of
-  the first one — that way a run that itself fails early still leaves the
-  database clean for the next run, rather than depending on some later run
-  reaching its own end. Earlier runs leaked orphaned Address rows into the
-  shared dev database before this was fixed.
+  development database, not a dedicated one. Deleting an event through the
+  API also deletes its venue, so deleting the events a test created is enough.
+  The events spec runs a `beforeAll` sweep for anything a previous,
+  interrupted run left behind — before any test in the file, so a run that
+  fails early still leaves the database clean for the next one.
 - Keep it to a handful of high-value flows. E2E is the slowest, flakiest layer;
   push detail down into integration tests.
 

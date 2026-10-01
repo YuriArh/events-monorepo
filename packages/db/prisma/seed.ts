@@ -1,4 +1,38 @@
+import argon2 from "argon2";
+
 import { prisma } from "../src/index.js";
+
+/** Local Postgres, plus `postgres`, the docker-compose service name. */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "postgres"]);
+
+/**
+ * The seed wipes users, events and addresses, so it refuses to touch anything
+ * that might hold real data: production, or a database that isn't local.
+ * SEED_ALLOW_ANY_DB=1 overrides the host check (not the production one).
+ * Runs before any query, so a refused run never connects.
+ */
+const assertSafeToSeed = () => {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Refusing to seed: NODE_ENV is production. The seed wipes users, events and addresses.");
+  }
+
+  if (process.env.SEED_ALLOW_ANY_DB === "1") return;
+
+  let host: string;
+  try {
+    // IPv6 hosts come back bracketed ("[::1]").
+    host = new URL(process.env.DATABASE_URL ?? "").hostname.replace(/^\[(.*)\]$/, "$1");
+  } catch {
+    throw new Error("Refusing to seed: DATABASE_URL is missing or not a valid URL.");
+  }
+
+  if (!LOCAL_HOSTS.has(host)) {
+    throw new Error(
+      `Refusing to seed: database host "${host}" is not local (${[...LOCAL_HOSTS].join(", ")}). ` +
+        "The seed wipes users, events and addresses. Set SEED_ALLOW_ANY_DB=1 to override.",
+    );
+  }
+};
 
 /**
  * Idempotent: clears the tables it owns, then recreates a known set. Keeping
@@ -6,8 +40,22 @@ import { prisma } from "../src/index.js";
  * stops a reset from being a scary decision.
  */
 const seed = async () => {
+  assertSafeToSeed();
+
   await prisma.event.deleteMany();
   await prisma.address.deleteMany();
+  await prisma.user.deleteMany(); // sessions and tokens cascade
+
+  // Same algorithm as the API (apps/api/src/lib/password.ts), so these log in.
+  const passwordHash = await argon2.hash("password123", { type: argon2.argon2id });
+  const verified = new Date();
+
+  await prisma.user.create({
+    data: { email: "admin@example.test", name: "Admin", role: "ADMIN", passwordHash, emailVerifiedAt: verified },
+  });
+  const user = await prisma.user.create({
+    data: { email: "user@example.test", name: "Sample User", passwordHash, emailVerifiedAt: verified },
+  });
 
   const townHall = await prisma.address.create({
     data: {
@@ -45,6 +93,7 @@ const seed = async () => {
         startsAt: from(7, 9),
         endsAt: from(8, 17),
         addressId: townHall.id,
+        organizerId: user.id,
       },
       {
         name: "Design review",
@@ -52,16 +101,22 @@ const seed = async () => {
         startsAt: from(2, 14),
         endsAt: from(2, 15),
         addressId: riverside.id,
+        organizerId: user.id,
       },
       // 1:1 — this event has no venue; riverside is already taken above.
-      { name: "Community meetup", startsAt: from(21, 18) },
+      { name: "Community meetup", startsAt: from(21, 18), organizerId: user.id },
       // No venue yet, to exercise the optional relation.
-      { name: "Unscheduled retro" },
+      { name: "Unscheduled retro", organizerId: user.id },
     ],
   });
 
-  const [addresses, events] = await Promise.all([prisma.address.count(), prisma.event.count()]);
-  console.log(`Seeded ${addresses} addresses and ${events} events.`);
+  const [users, addresses, events] = await Promise.all([
+    prisma.user.count(),
+    prisma.address.count(),
+    prisma.event.count(),
+  ]);
+  console.log(`Seeded ${users} users, ${addresses} addresses and ${events} events.`);
+  console.log("Sign in as admin@example.test or user@example.test, password: password123");
 };
 
 seed()

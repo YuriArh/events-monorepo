@@ -1,32 +1,85 @@
-import { prisma } from "@repo/db";
+import { Prisma, prisma } from "@repo/db";
 
-import type { CreateEventInput, UpdateEventInput } from "./event.types.js";
+import type { CreateAddressInput, CreateEventInput, UpdateEventInput } from "./event.types.js";
+
+const withAddress = { address: true } as const;
+
+/**
+ * Prisma cannot tell "SQL NULL" from "the JSON value null" on a nullable Json
+ * column, so it refuses a bare `null` and wants `Prisma.DbNull` instead.
+ */
+const toAddressData = (address: CreateAddressInput) => ({
+  // Every optional column is written, so an update replaces the whole venue
+  // instead of leaving stale values from the previous one.
+  label: address.label ?? null,
+  line1: address.line1,
+  line2: address.line2 ?? null,
+  city: address.city,
+  region: address.region ?? null,
+  postalCode: address.postalCode ?? null,
+  country: address.country,
+  lat: address.lat ?? null,
+  lon: address.lon ?? null,
+  osmId: address.osmId ?? null,
+  raw:
+    address.raw === undefined || address.raw === null
+      ? Prisma.DbNull
+      : (address.raw as Prisma.InputJsonValue),
+});
+
+/**
+ * The venue is part of the event: `undefined` leaves it alone, `null` deletes
+ * the row, an object creates it or updates the existing one in place.
+ */
+const venueWrite = (address: CreateAddressInput | null | undefined, hasVenue: boolean) => {
+  if (address === undefined) return undefined;
+  if (address === null) return hasVenue ? { delete: true } : undefined;
+
+  const data = toAddressData(address);
+  return { upsert: { create: data, update: data } };
+};
 
 export const eventRepository = {
   findMany() {
-    return prisma.event.findMany({
-      orderBy: { startsAt: "asc" },
-      include: { address: true },
-    });
+    return prisma.event.findMany({ orderBy: { startsAt: "asc" }, include: withAddress });
   },
 
   findById(id: string) {
-    return prisma.event.findUnique({ where: { id }, include: { address: true } });
+    return prisma.event.findUnique({ where: { id }, include: withAddress });
   },
 
-  findByAddressId(addressId: string) {
-    return prisma.event.findUnique({ where: { addressId } });
+  findByImageKey(imageKey: string) {
+    return prisma.event.findFirst({ where: { imageKey }, select: { id: true } });
   },
 
-  create(data: CreateEventInput) {
-    return prisma.event.create({ data, include: { address: true } });
+  /** organizerId comes from the session, never from the request body. */
+  create({ address, ...data }: CreateEventInput, organizerId: string) {
+    return prisma.event.create({
+      data: {
+        ...data,
+        organizer: { connect: { id: organizerId } },
+        address: address ? { create: toAddressData(address) } : undefined,
+      },
+      include: withAddress,
+    });
   },
 
-  update(id: string, data: UpdateEventInput) {
-    return prisma.event.update({ where: { id }, data, include: { address: true } });
+  update(id: string, { address, ...data }: UpdateEventInput, hasVenue: boolean) {
+    return prisma.event.update({
+      where: { id },
+      data: { ...data, address: venueWrite(address, hasVenue) },
+      include: withAddress,
+    });
   },
 
-  delete(id: string) {
-    return prisma.event.delete({ where: { id } });
+  /** The venue belongs to the event, so it goes with it. */
+  delete(id: string, addressId: string | null) {
+    return prisma.$transaction(async (tx) => {
+      await tx.event.delete({ where: { id } });
+
+      if (addressId) {
+        await tx.address.delete({ where: { id: addressId } });
+      }
+    });
   },
 };

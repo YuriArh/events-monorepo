@@ -1,31 +1,45 @@
 import { readdir, rm } from "node:fs/promises";
 
+import { prisma } from "@repo/db";
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { buildApp } from "../../app.js";
 import { UPLOADS_DIR } from "../../lib/uploads.js";
+import { makeAdmin, signUp } from "../../test/auth.js";
 
 let app: FastifyInstance;
 
+/** A signed-in user's session cookie; a fresh user per test (tables are truncated). */
+let cookie: string;
+
 const STARTS_AT = "2026-10-01T18:00:00.000Z";
 const ENDS_AT = "2026-10-01T21:00:00.000Z";
+
+const VENUE = {
+    label: "Town Hall",
+    line1: "1 Civic Square",
+    city: "Amsterdam",
+    country: "NL",
+};
 
 type EventPayload = {
     id: string;
     name: string;
     description: string | null;
     addressId: string | null;
+    address: { id: string; label: string | null; city: string } | null;
     imageKey: string | null;
     startsAt: string;
     endsAt: string | null;
+    organizerId: string | null;
 };
 
 const createEvent = async (overrides: Record<string, unknown> = {}) => {
     const response = await app.inject({
         method: "POST",
         url: "/api/events",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", cookie },
         payload: { name: "Team offsite", startsAt: STARTS_AT, ...overrides },
     });
 
@@ -52,14 +66,18 @@ const uploadFile = async (content: Buffer, { filename = "photo.png", contentType
     return app.inject({
         method: "POST",
         url: "/api/events/upload",
-        headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+        headers: { "content-type": `multipart/form-data; boundary=${boundary}`, cookie },
         payload,
     });
 };
 
 beforeAll(async () => {
-    app = buildApp();
+    app = buildApp({ rateLimits: false });
     await app.ready();
+});
+
+beforeEach(async () => {
+    ({ cookie } = await signUp(app));
 });
 
 afterAll(async () => {
@@ -90,7 +108,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: {
                 name: "Team offsite",
                 description: "Two days offsite",
@@ -118,7 +136,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Backwards", startsAt: ENDS_AT, endsAt: STARTS_AT },
         });
 
@@ -132,7 +150,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Open ended", endsAt: ENDS_AT },
         });
 
@@ -148,7 +166,7 @@ describe("POST /api/events", () => {
         const response = await app.inject({
             method: "POST",
             url: "/api/events",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "Valid", startsAt: STARTS_AT, ...overrides },
         });
 
@@ -164,7 +182,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { description: "after" },
         });
 
@@ -180,7 +198,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { endsAt: STARTS_AT },
         });
 
@@ -195,7 +213,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { startsAt: null, endsAt: STARTS_AT },
         });
 
@@ -206,7 +224,7 @@ describe("PATCH /api/events/:id", () => {
         const response = await app.inject({
             method: "PATCH",
             url: "/api/events/missing",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
             payload: { name: "After" },
         });
 
@@ -218,7 +236,7 @@ describe("DELETE /api/events/:id", () => {
     it("deletes the event", async () => {
         const created = await createEvent();
 
-        const response = await app.inject({ method: "DELETE", url: `/api/events/${created.id}` });
+        const response = await app.inject({ method: "DELETE", url: `/api/events/${created.id}`, headers: { cookie } });
 
         expect(response.statusCode).toBe(204);
 
@@ -227,7 +245,7 @@ describe("DELETE /api/events/:id", () => {
     });
 
     it("returns 404 for an unknown id", async () => {
-        const response = await app.inject({ method: "DELETE", url: "/api/events/missing" });
+        const response = await app.inject({ method: "DELETE", url: "/api/events/missing", headers: { cookie } });
 
         expect(response.statusCode).toBe(404);
     });
@@ -240,7 +258,7 @@ describe("DELETE /api/events/:id", () => {
         const response = await app.inject({
             method: "DELETE",
             url: `/api/events/${created.id}`,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", cookie },
         });
 
         expect(response.statusCode).not.toBe(500);
@@ -250,7 +268,7 @@ describe("DELETE /api/events/:id", () => {
         const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
         const created = await createEvent({ imageKey });
 
-        await app.inject({ method: "DELETE", url: `/api/events/${created.id}` });
+        await app.inject({ method: "DELETE", url: `/api/events/${created.id}`, headers: { cookie } });
 
         await expect(readdir(UPLOADS_DIR)).resolves.not.toContain(imageKey);
     });
@@ -289,6 +307,20 @@ describe("POST /api/events/upload", () => {
 });
 
 describe("CORS", () => {
+    // Without this the browser drops the session cookie on every API call.
+    it("allows credentialed requests from the web origin", async () => {
+        const response = await app.inject({
+            method: "OPTIONS",
+            url: "/api/events",
+            headers: {
+                origin: "http://localhost:3000",
+                "access-control-request-method": "POST",
+            },
+        });
+
+        expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    });
+
     // Regression: @fastify/cors defaults to GET,HEAD,POST, which silently blocked
     // every edit and delete from the browser.
     it.each(["PATCH", "DELETE"])("allows %s from the web origin", async (method) => {
@@ -303,5 +335,368 @@ describe("CORS", () => {
 
         expect(response.headers["access-control-allow-methods"]).toContain(method);
         expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    });
+});
+
+describe("event venue", () => {
+    it("creates the venue with the event", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        expect(created.address).toMatchObject({ label: "Town Hall", city: "Amsterdam" });
+        expect(created.addressId).toBe(created.address?.id);
+    });
+
+    it("updates the venue in place", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { address: { ...VENUE, city: "Rotterdam" } },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+            addressId: created.addressId,
+            address: { id: created.addressId, city: "Rotterdam" },
+        });
+        expect(await prisma.address.count()).toBe(1);
+    });
+
+    it("adds a venue to an event that had none", async () => {
+        const created = await createEvent();
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { address: VENUE },
+        });
+
+        expect(response.json()).toMatchObject({ address: { city: "Amsterdam" } });
+    });
+
+    it("keeps the venue when address is omitted", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { name: "Renamed" },
+        });
+
+        expect(response.json()).toMatchObject({ addressId: created.addressId });
+    });
+
+    it("deletes the venue row when address is null", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { address: null },
+        });
+
+        expect(response.json()).toMatchObject({ addressId: null, address: null });
+        expect(await prisma.address.count()).toBe(0);
+    });
+
+    // Addresses no longer outlive their event; before this, the e2e suite had
+    // to clean up orphans by hand.
+    it("deletes the venue with the event", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        await app.inject({ method: "DELETE", url: `/api/events/${created.id}`, headers: { cookie } });
+
+        expect(await prisma.address.count()).toBe(0);
+    });
+
+    it("round-trips coordinates and the raw feature", async () => {
+        const raw = { type: "Feature", properties: { osm_id: 123456 } };
+
+        const created = await createEvent({
+            address: { ...VENUE, lat: 52.3723, lon: 4.9002, osmId: "W123456", raw },
+        });
+
+        expect(created.address).toMatchObject({ lat: 52.3723, osmId: "W123456", raw });
+    });
+
+    // Prisma needs DbNull rather than null for a nullable Json column.
+    it("stores a venue with no geocoding fields", async () => {
+        const created = await createEvent({ address: VENUE });
+
+        expect(created.address).toMatchObject({ lat: null, lon: null, osmId: null, raw: null });
+    });
+
+    it.each([
+        ["a missing line1", { line1: undefined }],
+        ["a missing city", { city: undefined }],
+        ["a missing country", { country: undefined }],
+    ])("rejects a venue with %s, reporting the nested path", async (_label, overrides) => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie },
+            payload: { name: "Valid", address: { ...VENUE, ...overrides } },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().issues[0].path[0]).toBe("address");
+    });
+
+    it("replaces the whole venue on update, clearing omitted fields", async () => {
+        const created = await createEvent({
+            address: {
+                ...VENUE,
+                line2: "Floor 2",
+                region: "NH",
+                postalCode: "1011 AB",
+                lat: 52.3723,
+                lon: 4.9002,
+                osmId: "W123456",
+                raw: { type: "Feature" },
+            },
+        });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { address: VENUE },
+        });
+
+        expect(response.json()).toMatchObject({
+            addressId: created.addressId,
+            address: {
+                id: created.addressId,
+                line2: null,
+                region: null,
+                postalCode: null,
+                lat: null,
+                lon: null,
+                osmId: null,
+                raw: null,
+            },
+        });
+    });
+
+    it("treats address null on an event with no venue as a no-op", async () => {
+        const created = await createEvent();
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { address: null },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ addressId: null, address: null });
+    });
+
+    it("no longer exposes /api/addresses", async () => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/addresses",
+            headers: { "content-type": "application/json", cookie },
+            payload: VENUE,
+        });
+
+        expect(response.statusCode).toBe(404);
+    });
+});
+
+describe("ownership", () => {
+    const patch = (id: string, sessionCookie?: string) =>
+        app.inject({
+            method: "PATCH",
+            url: `/api/events/${id}`,
+            headers: { "content-type": "application/json", ...(sessionCookie ? { cookie: sessionCookie } : {}) },
+            payload: { name: "Hijacked", address: VENUE },
+        });
+
+    it("requires a session to create", async () => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json" },
+            payload: { name: "Anonymous" },
+        });
+
+        expect(response.statusCode).toBe(401);
+    });
+
+    it("requires a session to upload", async () => {
+        const response = await app.inject({ method: "POST", url: "/api/events/upload" });
+
+        expect(response.statusCode).toBe(401);
+    });
+
+    it("makes the creator the organizer, ignoring one in the body", async () => {
+        const other = await signUp(app);
+
+        const created = await createEvent({ organizerId: other.user.id });
+        const self = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+
+        expect(created).toMatchObject({ organizerId: self.json().user.id });
+    });
+
+    it("forbids another user from editing, and leaves the event and venue as they were", async () => {
+        const created = await createEvent({ address: VENUE });
+        const stranger = await signUp(app);
+
+        const response = await patch(created.id, stranger.cookie);
+
+        expect(response.statusCode).toBe(403);
+        const after = await app.inject({ method: "GET", url: `/api/events/${created.id}` });
+        expect(after.json()).toMatchObject({ name: "Team offsite", address: { city: "Amsterdam" } });
+    });
+
+    it("forbids another user from deleting", async () => {
+        const created = await createEvent();
+        const stranger = await signUp(app);
+
+        const response = await app.inject({
+            method: "DELETE",
+            url: `/api/events/${created.id}`,
+            headers: { cookie: stranger.cookie },
+        });
+
+        expect(response.statusCode).toBe(403);
+    });
+
+    it("lets an admin edit and delete anyone's event", async () => {
+        const created = await createEvent();
+        const admin = await signUp(app);
+        await makeAdmin(admin.user.id);
+
+        expect((await patch(created.id, admin.cookie)).statusCode).toBe(200);
+        const deletion = await app.inject({
+            method: "DELETE",
+            url: `/api/events/${created.id}`,
+            headers: { cookie: admin.cookie },
+        });
+        expect(deletion.statusCode).toBe(204);
+    });
+
+    it("lets only an admin edit an event that has no organizer", async () => {
+        const created = await createEvent();
+        await prisma.event.update({ where: { id: created.id }, data: { organizerId: null } });
+
+        expect((await patch(created.id, cookie)).statusCode).toBe(403);
+
+        const admin = await signUp(app);
+        await makeAdmin(admin.user.id);
+        expect((await patch(created.id, admin.cookie)).statusCode).toBe(200);
+    });
+
+    it("rejects creating an event with an image another event already uses, keeping the file", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        await createEvent({ imageKey });
+        const other = await signUp(app);
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { name: "Stolen", imageKey },
+        });
+
+        expect(response.statusCode).toBe(409);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
+    it("rejects updating to an image another event already uses", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        await createEvent({ imageKey });
+        const other = await signUp(app);
+        const mine = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { name: "Mine" },
+        });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${mine.json().id}`,
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { imageKey },
+        });
+
+        expect(response.statusCode).toBe(409);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
+    // On a case-insensitive filesystem the upper-case variant names the same
+    // file, so accepting it would let a stranger get the victim's image unlinked.
+    it("rejects an upper-case variant of another event's image key, keeping the file", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        await createEvent({ imageKey });
+        const other = await signUp(app);
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { name: "Stolen", imageKey: imageKey.toUpperCase() },
+        });
+
+        expect(response.statusCode).toBe(400);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
+    it("accepts a PATCH that repeats the event's own image key, keeping the file", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        const created = await createEvent({ imageKey });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { name: "Renamed", imageKey },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().imageKey).toBe(imageKey);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
+    it("keeps the event after a forbidden delete", async () => {
+        const created = await createEvent();
+        const stranger = await signUp(app);
+
+        await app.inject({
+            method: "DELETE",
+            url: `/api/events/${created.id}`,
+            headers: { cookie: stranger.cookie },
+        });
+
+        const after = await app.inject({ method: "GET", url: `/api/events/${created.id}` });
+        expect(after.statusCode).toBe(200);
+    });
+
+    it("ignores an organizerId in a PATCH body", async () => {
+        const created = await createEvent();
+        const other = await signUp(app);
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { name: "Renamed", organizerId: other.user.id },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().organizerId).toBe(created.organizerId);
+    });
+
+    it("is 401, not 403, when anonymous", async () => {
+        const created = await createEvent();
+
+        expect((await patch(created.id)).statusCode).toBe(401);
     });
 });

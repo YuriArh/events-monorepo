@@ -1,5 +1,6 @@
+import type { UserRole } from "@repo/db";
+
 import { deleteUpload } from "../../lib/uploads.js";
-import { addressRepository } from "../addresses/address.repository.js";
 import { eventRepository } from "./event.repository.js";
 import type { CreateEventInput, UpdateEventInput } from "./event.types.js";
 
@@ -10,22 +11,6 @@ export class EventNotFoundError extends Error {
   }
 }
 
-/** The payload referenced a venue that does not exist — a bad request, not a 404. */
-export class UnknownAddressError extends Error {
-  constructor(id: string) {
-    super(`Address with id "${id}" does not exist`);
-    this.name = "UnknownAddressError";
-  }
-}
-
-/** 1:1: another event already owns this address. */
-export class AddressAlreadyLinkedError extends Error {
-  constructor(id: string) {
-    super(`Address with id "${id}" is already linked to an event`);
-    this.name = "AddressAlreadyLinkedError";
-  }
-}
-
 export class InvalidEventDateRangeError extends Error {
   constructor() {
     super("endsAt must be after startsAt");
@@ -33,26 +18,41 @@ export class InvalidEventDateRangeError extends Error {
   }
 }
 
-/**
- * Checked up front so a bad reference is a clear 400 rather than the raw
- * foreign-key violation Prisma would otherwise throw.
- */
-const assertAddressExists = async (addressId: string | null | undefined) => {
-  if (!addressId) return;
-
-  if (!(await addressRepository.findById(addressId))) {
-    throw new UnknownAddressError(addressId);
+export class ImageInUseError extends Error {
+  constructor() {
+    super("This image belongs to another event");
+    this.name = "ImageInUseError";
   }
+}
+
+export class ForbiddenError extends Error {
+  constructor() {
+    super("You can only change events you organize");
+    this.name = "ForbiddenError";
+  }
+}
+
+type Actor = { id: string; role: UserRole };
+
+/**
+ * The organizer or an admin. Ownerless events (created before accounts
+ * existed) are admin-only. Kept here, not in routes, so no route can skip it.
+ */
+export const canModify = (event: { organizerId: string | null }, actor: Actor) =>
+  actor.role === "ADMIN" || (event.organizerId !== null && event.organizerId === actor.id);
+
+/** Image keys are public via GET, so a key already used by another event must
+ *  not be claimed: deleting that event would unlink the original owner's file. */
+const assertImageFree = async (imageKey: string | null | undefined, exceptEventId?: string) => {
+  if (!imageKey) return;
+
+  const holder = await eventRepository.findByImageKey(imageKey);
+
+  if (holder && holder.id !== exceptEventId) throw new ImageInUseError();
 };
 
-const assertAddressFree = async (addressId: string | null | undefined, exceptEventId?: string) => {
-  if (!addressId) return;
-
-  const occupant = await eventRepository.findByAddressId(addressId);
-
-  if (occupant && occupant.id !== exceptEventId) {
-    throw new AddressAlreadyLinkedError(addressId);
-  }
+const assertCanModify = (event: { organizerId: string | null }, actor: Actor) => {
+  if (!canModify(event, actor)) throw new ForbiddenError();
 };
 
 /**
@@ -87,24 +87,26 @@ export const eventService = {
     return event;
   },
 
-  async create(input: CreateEventInput) {
+  async create(input: CreateEventInput, actor: Actor) {
     assertDateRange(input.startsAt, input.endsAt);
-    await assertAddressExists(input.addressId);
-    await assertAddressFree(input.addressId);
+    await assertImageFree(input.imageKey);
 
-    return eventRepository.create(input);
+    return eventRepository.create(input, actor.id);
   },
 
-  async update(id: string, input: UpdateEventInput) {
+  async update(id: string, input: UpdateEventInput, actor: Actor) {
     const existing = await this.getById(id);
+    assertCanModify(existing, actor);
+
+    if (input.imageKey !== existing.imageKey) {
+      await assertImageFree(input.imageKey, id);
+    }
 
     // Checked against the merged result: a payload carrying only one of the two
     // dates can still be invalid once combined with what is already stored.
     assertDateRange(merge(input.startsAt, existing.startsAt), merge(input.endsAt, existing.endsAt));
-    await assertAddressExists(input.addressId);
-    await assertAddressFree(input.addressId, id);
 
-    const updated = await eventRepository.update(id, input);
+    const updated = await eventRepository.update(id, input, existing.addressId !== null);
 
     if (
       input.imageKey !== undefined &&
@@ -117,10 +119,11 @@ export const eventService = {
     return updated;
   },
 
-  async remove(id: string) {
+  async remove(id: string, actor: Actor) {
     const existing = await this.getById(id);
+    assertCanModify(existing, actor);
 
-    await eventRepository.delete(id);
+    await eventRepository.delete(id, existing.addressId);
     await deleteUpload(existing.imageKey);
   },
 };

@@ -31,8 +31,7 @@ The web app talks to the API over HTTP; it does not import `@repo/db`. Only
 
 - `/` — the event list.
 - `/events/new` — create form.
-- `/events/[id]/edit` — edit form, including updating the linked venue
-  (`Address`) in place.
+- `/events/[id]/edit` — edit form, including the venue, which is sent inside the event payload.
 
 Create and edit are full routes, not a dialog over the list page: the list's
 "New Event" and per-row edit controls are links (`next/link`), not buttons
@@ -41,7 +40,7 @@ need a form.
 
 ## API module layering
 
-Modules: `events/`, `addresses/`, `geocoding/`.
+Modules: `auth/`, `users/`, `events/`, `geocoding/`.
 
 Each feature under `apps/api/src/modules/<name>/` splits into four files, and the
 dependency direction only ever points down:
@@ -73,10 +72,14 @@ Request validation lives in `@repo/contracts`, not in either app. For events,
 the package exports two schemas derived from one field shape: a wire schema
 (ISO date strings) that the browser form validates against, and a payload
 schema (coerced `Date` objects) that the API parses request bodies with.
-Addresses have no date fields, so they export only a single pair —
-`createAddressInput` / `updateAddressInput` — with no separate wire/payload
-split; there is nothing for a payload variant to coerce. The API's
+The venue has no endpoint of its own: `createAddressInput` is used only as the nested `address` field of the event schemas. The API's
 `*.schema.ts` files are thin re-exports, so the module layering is unchanged.
+
+An event's venue (`Address`) is part of the event. It is created, replaced and
+deleted only through the event endpoints — `address` omitted leaves it alone,
+`null` deletes it, an object creates or replaces it — and deleting an event
+deletes its venue. There is no `/api/addresses`. This keeps access control in
+one place: whoever may change the event may change its venue.
 
 The server remains authoritative. Client-side validation is a UX improvement,
 never the security boundary.
@@ -117,6 +120,53 @@ alongside `suggestions` so the form can tell "nothing matched" apart from
 Addresses store the full Photon feature in `Address.raw` alongside the derived
 columns and `lat`/`lon`/`osmId`. All of those are nullable: addresses created
 before geocoding existed have none of them.
+
+## Authentication
+
+Self-built, email + password. Full design: `docs/superpowers/specs/2026-10-01-auth-design.md`.
+
+- **Sessions** live in Postgres. The `sid` cookie (`HttpOnly`, `SameSite=Lax`,
+  `Secure` whenever `WEB_ORIGIN` is `https:` — `COOKIE_SECURE` in
+  `lib/config.ts`, deliberately not tied to `NODE_ENV`) carries a random
+  32-byte token; `Session.tokenHash` stores only its sha256. 30-day lifetime, renewed at most once a day.
+- **`plugins/session.ts`** resolves the cookie on every request into
+  `request.user` (a `PublicUser`, never containing `passwordHash`).
+  `requireAuth` -> 401, `requireRole` -> 403. Handlers behind `requireAuth` read
+  the user with `currentUser(request)`.
+- **Authorization** is in services, not routes: `canModify` in
+  `event.service.ts` allows the organizer or an admin.
+- **One-shot tokens** (`AuthToken`: password reset, email verification) are
+  hashed the same way and redeemed with a conditional `updateMany`, which is
+  what makes them single-use under concurrency.
+- **Mail** goes through the `Mailer` interface (`lib/mailer.ts`): logged to
+  the console in development, captured in memory in tests. There is no real
+  provider yet. The console fallback fails closed: `buildApp` throws when no
+  `Mailer` is injected unless `NODE_ENV` is exactly `development` or `test`
+  (unset counts as production).
+- **No account-existence leak**: `POST /api/auth/password/forgot` replies 204
+  immediately and runs the reset work fire-and-forget (failures are logged by
+  error name only), so neither timing nor mailer errors reveal whether an
+  account exists. Registration creates the user and session first, then sends
+  the verification email best-effort: a mail failure doesn't fail it.
+- **CSRF**: `SameSite=Lax` plus an `Origin` check on POST/PATCH/PUT/DELETE. A
+  request whose `Origin` header is present and differs from `WEB_ORIGIN` is
+  rejected (403); requests with no `Origin` (curl, server-to-server, tests)
+  pass. `WEB_ORIGIN` is normalized with `new URL(...).origin`.
+- **Rate limits** (`lib/rate-limits.ts`) are in memory, per process, and run
+  at `preHandler` so keys can use the body or `request.user`. They cover
+  register, login, password forgot/reset, email verify/resend, password change
+  and `DELETE /api/users/me` (password re-check). Login keys on
+  `clientKey(ip)` plus the email, and the signed-in routes key on the user
+  with `clientKey(ip)` as the fallback; `clientKey` groups IPv6 addresses by
+  /64. The IP-only routes use the plugin's default key, which also groups IPv6
+  by /64. Behind a reverse proxy, configure Fastify's `trustProxy`, or every
+  client shares one IP bucket.
+- **Event images**: the service rejects (409) an `imageKey` that another event
+  already uses, so one user can't make the server delete another user's
+  uploaded file. An uploaded file not yet attached to an event has no owner.
+  `imageKeySchema` accepts only the exact lowercase shape `buildImageKey`
+  generates, so an upper-case variant (the same file on a case-insensitive
+  filesystem) can't slip past that exact-match check.
 
 ## Error handling
 
@@ -164,6 +214,16 @@ prisma migrate resolve --applied <migration_name>
 Prisma blocks AI agents from running destructive migrate commands unless
 `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` is set to the user's consent text.
 
+## Dev seed
+
+`packages/db/prisma/seed.ts` creates `admin@example.test` and
+`user@example.test` (password `password123`); the regular user owns the sample
+events. It wipes users, events and addresses first, so never run it against a
+database holding real data. Before any query it refuses to run when
+`NODE_ENV=production`, or when the `DATABASE_URL` host is not `localhost`,
+`127.0.0.1`, `::1` or `postgres` (the compose service). `SEED_ALLOW_ANY_DB=1`
+lifts the host check only, for a deliberately disposable remote database.
+
 ## Image uploads
 
 `POST /api/events/upload` takes a multipart file and returns `{ imageKey }`;
@@ -187,8 +247,30 @@ development; production needs object storage.
 | --------------------- | -------- | ----------------------------------------- |
 | `DATABASE_URL`        | api, db  | `apps/api/.env`, `packages/db/.env`        |
 | `NEXT_PUBLIC_API_URL` | web      | `apps/web/.env.local`, defaults to :4000   |
+| `WEB_ORIGIN`          | api      | CORS origin, Origin check, links in emails. Defaults to `http://localhost:3000`. An `https:` origin makes the session cookie `Secure` |
+| `NODE_ENV`            | api, db  | `development` (set by the api `dev` script) and `test` (set by Vitest) allow the console mailer; anything else, including unset, requires an injected `Mailer` and is treated as production. `production` also makes the db seed refuse to run |
 
 `.env` files are gitignored; `packages/db/.env.example` is the reference.
+
+`pnpm --filter api start` sets no `NODE_ENV`, so it refuses to start
+("A real Mailer must be configured…") until a real `Mailer` is wired into
+`server.ts`. That is intentional: a deployment must never log password-reset
+links to the console.
+
+### Deploying
+
+- **Same site.** The web app and API must share a registrable domain (e.g.
+  `app.example.com` + `api.example.com`). The session cookie is
+  `SameSite=Lax`, so on a different site (e.g. `example-web.com` +
+  `example-api.com`) the browser does not send it on the web app's
+  credentialed fetches, and every request looks signed out.
+- **`WEB_ORIGIN`** must be the exact public origin of the web app (`https://…`):
+  it drives CORS, the Origin check, email links and the `Secure` cookie flag.
+- **`NODE_ENV`** should be `production`. Unset also fails closed, but
+  `production` is what other tooling (Prisma, the seed guard) recognises.
+- **`trustProxy`.** Behind a reverse proxy or load balancer, configure
+  Fastify's `trustProxy` so `request.ip` is the client, not the proxy;
+  otherwise every client shares one rate-limit bucket.
 
 ## CORS
 
@@ -196,3 +278,5 @@ The API allows exactly the web origin and the methods actually in use
 (`GET, POST, PATCH, DELETE`). `@fastify/cors` defaults to `GET,HEAD,POST`, so
 any new method must be added explicitly or the browser will block it while
 curl keeps working. There is a regression test for this.
+
+Requests are credentialed (`credentials: true`) so the session cookie is sent; this requires an exact origin, never `*`.
