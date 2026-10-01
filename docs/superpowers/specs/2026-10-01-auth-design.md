@@ -24,6 +24,7 @@ library underneath to catch mistakes.
 | Session lifetime | 30 days, sliding; renewed at most once a day |
 | CSRF | `SameSite=Lax` cookie + `Origin` check on state-changing requests |
 | Roles | `USER`, `ADMIN` (`UserRole` enum) |
+| Address access | None of its own — written only through its event; standalone `/api/addresses` routes removed |
 | Ownership | `Event.organizerId`, set from the session, never from the request body |
 | Email verification | Recorded (`emailVerifiedAt`), **not enforced** in this iteration |
 | Email delivery | `Mailer` interface; dev/test implementation logs or captures, no real provider |
@@ -312,10 +313,41 @@ The ownership check lives in `event.service.ts`
 can't be bypassed by a new route. `organizerId` is not in the create/update
 contracts — the client cannot set or change it.
 
-**Addresses** — `POST`, `PATCH`, `DELETE` require auth. `PATCH`/`DELETE` on an
-address linked to an event apply that event's owner-or-admin rule. An unlinked
-address has no owner, so any authenticated user may modify it — known
-limitation, see below.
+**Addresses — folded into events.** An address exists only as an event's
+venue, so it gets no access rules of its own: whoever may modify the event may
+modify its venue, and nobody else can reach it.
+
+Today the web app creates an address with `POST /api/addresses`, then sends its
+`addressId` to the event endpoint, and edits it with `PATCH /api/addresses/:id`.
+Those standalone write routes would each need their own ownership check — and
+without one, any signed-in user could rewrite another event's venue by id. So
+instead:
+
+- The venue travels inside the event payload. `createEventInput` /
+  `updateEventInput` replace `addressId` with
+  `address: createAddressInput.nullable().optional()`:
+  - omitted → venue unchanged;
+  - `null` → venue removed (the `Address` row is deleted);
+  - an object → venue created, or the existing one updated in place.
+- `event.service` writes the event and its address in one transaction, after
+  `assertCanModify`. `address.repository.ts` stays, now called only from the
+  event service.
+- Deleting an event deletes its address in the same transaction, so addresses
+  no longer outlive their event (today they are orphaned — see the E2E
+  cleanup note in `docs/testing-conventions.md`, which this removes the need
+  for).
+- `POST`, `PATCH`, `DELETE /api/addresses` are removed. `GET /api/addresses`
+  and `GET /api/addresses/:id` are removed too; the event response already
+  embeds its address.
+- `UnknownAddressError` and `AddressAlreadyLinkedError` disappear: the client
+  can no longer name an address id, so it cannot point at a missing or
+  already-linked one.
+- Web: `addressesApi` and `resolveAddressId` go away; the forms send `address`
+  with the event.
+
+This is a refactor of the event contract that would be worth doing even
+without auth; auth is what makes it necessary. The schema (FK on
+`Event.addressId`, `@unique`) is unchanged.
 
 **Geocoding** — `GET /api/geocode` requires auth. Only the event form uses it,
 and the form now requires a session; this stops anonymous traffic from
@@ -464,7 +496,14 @@ Per `docs/testing-conventions.md`: integration first, against `eventapp_test`.
 - `Origin: https://evil.example` on a `POST` → `403`; correct origin passes.
 - Rate limit: the 6th login attempt in the window → `429`.
 - CORS preflight from `WEB_ORIGIN` allows credentials.
-- Existing event, address and geocode tests sign up first and send the cookie.
+- Venue via the event: create with `address` creates the row; update edits it
+  in place; `address: null` and event deletion both delete the `Address` row;
+  another user's PATCH carrying an `address` → `403` and the venue is
+  unchanged.
+- `POST`/`PATCH`/`DELETE /api/addresses` → `404` (routes gone).
+- Existing event and geocode tests sign up first and send the cookie;
+  `address.routes.test.ts` is removed with the routes, its cases moving to
+  `event.routes.test.ts`.
 
 **E2E**
 
@@ -482,19 +521,19 @@ Each step leaves `pnpm check-types && pnpm lint && pnpm test` green.
 
 1. `lib/crypto.ts`, `lib/password.ts`, session plugin, cookie + CORS changes,
    register / login / logout / me.
-2. Event ownership, auth on events, addresses, geocode; update existing tests.
-3. Web: credentials, `useMe`, login/register pages, header, guards, owner-only
+2. Fold the address into the event payload; remove `/api/addresses` write
+   routes, `addressesApi` and `resolveAddressId`; delete the address with its
+   event. No auth yet — a pure refactor, existing tests adapted.
+3. Event ownership, auth on events and geocode; update existing tests.
+4. Web: credentials, `useMe`, login/register pages, header, guards, owner-only
    controls; e2e.
-4. Mailer, email verification, forgot/reset password, web pages for them.
-5. Account page: change password, logout-all, profile, delete account.
-6. Rate limiting, `Origin` check, seed users, docs (`architecture.md` layout,
+5. Mailer, email verification, forgot/reset password, web pages for them.
+6. Account page: change password, logout-all, profile, delete account.
+7. Rate limiting, `Origin` check, seed users, docs (`architecture.md` layout,
    module list, env table).
 
 ## Known limitations
 
-- **Unlinked addresses have no owner.** Any signed-in user can modify an
-  address not attached to an event. Fixing it needs `Address.createdById`, a
-  schema change deferred until it matters.
 - **In-memory rate limits** reset on restart and don't work across multiple
   API instances. Fine for one process; Redis-backed storage is the upgrade.
 - **Registration reveals existing emails** (see Security rules).
