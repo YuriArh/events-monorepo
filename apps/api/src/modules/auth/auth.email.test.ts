@@ -12,7 +12,7 @@ let mailer: MemoryMailer;
 
 beforeAll(async () => {
     mailer = new MemoryMailer();
-    app = buildApp({ mailer });
+    app = buildApp({ mailer, rateLimits: false });
     await app.ready();
 });
 
@@ -163,7 +163,7 @@ describe("when the mail provider is down", () => {
                 throw new Error("provider down");
             },
         };
-        const broken = buildApp({ mailer: failing });
+        const broken = buildApp({ mailer: failing, rateLimits: false });
         await broken.ready();
 
         try {

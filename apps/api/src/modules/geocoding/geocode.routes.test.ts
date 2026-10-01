@@ -35,7 +35,7 @@ const search = (query: string) =>
     app.inject({ method: "GET", url: `/api/geocode?${query}`, headers: { cookie } });
 
 beforeAll(async () => {
-    app = buildApp();
+    app = buildApp({ rateLimits: false });
     await app.ready();
 });
 

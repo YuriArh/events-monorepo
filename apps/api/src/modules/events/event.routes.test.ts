@@ -72,7 +72,7 @@ const uploadFile = async (content: Buffer, { filename = "photo.png", contentType
 };
 
 beforeAll(async () => {
-    app = buildApp();
+    app = buildApp({ rateLimits: false });
     await app.ready();
 });
 

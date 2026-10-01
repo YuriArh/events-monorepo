@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { ZodError } from "@repo/contracts";
@@ -17,13 +18,18 @@ import { geocodeRoutes } from "./modules/geocoding/geocode.routes.js";
 declare module "fastify" {
   interface FastifyInstance {
     mailer: Mailer;
+    rateLimitsEnabled: boolean;
   }
 }
 
 export type BuildAppOptions = {
   /** Tests pass a MemoryMailer; development logs mail to the console. */
   mailer?: Mailer;
+  /** On by default; tests turn it off so signing up many users doesn't trip it. */
+  rateLimits?: boolean;
 };
+
+const STATE_CHANGING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
 export function buildApp(options: BuildAppOptions = {}) {
   if (IS_PRODUCTION && !options.mailer) {
@@ -35,6 +41,28 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
 
   app.decorate("mailer", options.mailer ?? new ConsoleMailer((line) => app.log.info(line)));
+
+  app.decorate("rateLimitsEnabled", options.rateLimits ?? true);
+
+  // Only routes that opt in are limited. preHandler (not the default
+  // onRequest) so key generators can read the parsed body and request.user.
+  app.register(rateLimit, { global: false, hook: "preHandler" });
+
+  /**
+   * CSRF defence in depth. SameSite=Lax already keeps the cookie off
+   * cross-site writes, but treats sibling subdomains as same-site. Browsers
+   * always send Origin on these methods; requests without one (curl, tests)
+   * are not a CSRF vector.
+   */
+  app.addHook("onRequest", async (request, reply) => {
+    if (!STATE_CHANGING.has(request.method)) return;
+
+    const origin = request.headers.origin;
+
+    if (origin !== undefined && origin !== WEB_ORIGIN) {
+      return reply.status(403).send({ message: "Cross-origin request blocked" });
+    }
+  });
 
   app.register(cors, {
     origin: WEB_ORIGIN,

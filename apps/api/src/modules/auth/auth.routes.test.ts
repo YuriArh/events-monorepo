@@ -10,7 +10,7 @@ import { TEST_PASSWORD, sessionCookieFrom, signUp } from "../../test/auth.js";
 let app: FastifyInstance;
 
 beforeAll(async () => {
-    app = buildApp();
+    app = buildApp({ rateLimits: false });
     await app.ready();
 });
 
