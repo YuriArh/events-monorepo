@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createEventInput, createEventPayload } from "./index.js";
+import { createEventInput, createEventPayload, imageKeySchema } from "./index.js";
 
 describe("createEventInput (wire shape)", () => {
   it("keeps dates as ISO strings", () => {
@@ -51,5 +51,23 @@ describe("event venue", () => {
 
   it("drops the removed addressId field", () => {
     expect(createEventInput.parse({ name: "A", addressId: "x" })).not.toHaveProperty("addressId");
+  });
+});
+
+describe("imageKeySchema", () => {
+  it("accepts the keys the upload endpoint generates", () => {
+    for (const extension of ["jpg", "png", "webp", "gif"]) {
+      expect(imageKeySchema.safeParse(`0123456789abcdef0123456789abcdef.${extension}`).success).toBe(true);
+    }
+  });
+
+  it.each([
+    ["an upper-case name", "0123456789ABCDEF0123456789ABCDEF.png"],
+    ["an upper-case extension", "0123456789abcdef0123456789abcdef.PNG"],
+    ["an extension the generator never uses", "0123456789abcdef0123456789abcdef.jpeg"],
+    ["a non-hex name", "0123456789abcdef0123456789abcdeg.png"],
+    ["a name of the wrong length", "abc.png"],
+  ])("rejects %s", (_label, key) => {
+    expect(imageKeySchema.safeParse(key).success).toBe(false);
   });
 });

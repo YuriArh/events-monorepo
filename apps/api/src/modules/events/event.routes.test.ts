@@ -631,6 +631,40 @@ describe("ownership", () => {
         await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
     });
 
+    // On a case-insensitive filesystem the upper-case variant names the same
+    // file, so accepting it would let a stranger get the victim's image unlinked.
+    it("rejects an upper-case variant of another event's image key, keeping the file", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        await createEvent({ imageKey });
+        const other = await signUp(app);
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { name: "Stolen", imageKey: imageKey.toUpperCase() },
+        });
+
+        expect(response.statusCode).toBe(400);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
+    it("accepts a PATCH that repeats the event's own image key, keeping the file", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        const created = await createEvent({ imageKey });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { name: "Renamed", imageKey },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().imageKey).toBe(imageKey);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
     it("keeps the event after a forbidden delete", async () => {
         const created = await createEvent();
         const stranger = await signUp(app);
