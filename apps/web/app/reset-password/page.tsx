@@ -4,13 +4,13 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { resetPasswordInput } from "@repo/contracts";
 
 import { AuthPage, FormBanner, authStyles } from "@/components/auth-page";
 import { TextField } from "@/components/text-field";
 import { Button } from "@/components/ui/button";
-import { authApi } from "@/lib/auth";
+import { authApi, meKey } from "@/lib/auth";
 import { typography } from "@/styles/tokens.stylex";
 
 function ResetForm() {
@@ -18,7 +18,13 @@ function ResetForm() {
     const [newPassword, setNewPassword] = useState("");
     const [fieldError, setFieldError] = useState<string | undefined>();
 
-    const reset = useMutation({ mutationFn: authApi.resetPassword });
+    const queryClient = useQueryClient();
+
+    const reset = useMutation({
+        mutationFn: authApi.resetPassword,
+        // The server signed the user out everywhere; mirror that in the cache.
+        onSuccess: () => queryClient.setQueryData(meKey, null),
+    });
 
     if (reset.isSuccess) {
         return (
