@@ -3,6 +3,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { clearSessionCookie, setSessionCookie } from "../../lib/session-cookie.js";
 import { currentUser, requireAuth } from "../../plugins/session.js";
 import {
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
@@ -16,6 +17,7 @@ import {
   authService,
 } from "./auth.service.js";
 import type { SessionMeta } from "./auth.types.js";
+import { WrongPasswordError, userService } from "../users/user.service.js";
 
 /** Domain errors carry no HTTP knowledge, so routes map them here. */
 const replyForDomainError = (error: unknown, reply: FastifyReply) => {
@@ -28,6 +30,10 @@ const replyForDomainError = (error: unknown, reply: FastifyReply) => {
   }
 
   if (error instanceof InvalidTokenError) {
+    return reply.status(400).send({ message: error.message });
+  }
+
+  if (error instanceof WrongPasswordError) {
     return reply.status(400).send({ message: error.message });
   }
 
@@ -80,6 +86,26 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     clearSessionCookie(reply);
 
     return reply.status(204).send();
+  });
+
+  app.post("/logout-all", { preHandler: requireAuth }, async (request, reply) => {
+    await authService.logoutAll(currentUser(request).id);
+    clearSessionCookie(reply);
+
+    return reply.status(204).send();
+  });
+
+  app.post("/password/change", { preHandler: requireAuth }, async (request, reply) => {
+    const input = changePasswordSchema.parse(request.body);
+
+    try {
+      // sessionId is set whenever request.user is, which requireAuth guarantees.
+      await userService.changePassword(currentUser(request).id, request.sessionId as string, input);
+
+      return reply.status(204).send();
+    } catch (error) {
+      return replyForDomainError(error, reply);
+    }
   });
 
   app.get("/me", { preHandler: requireAuth }, async (request) => {

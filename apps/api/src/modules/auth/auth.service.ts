@@ -133,6 +133,10 @@ export const authService = {
     if (sessionId) await authRepository.deleteSession(sessionId);
   },
 
+  async logoutAll(userId: string) {
+    await authRepository.deleteUserSessions(userId);
+  },
+
   /** Silent for unknown emails: the caller always answers 204. */
   async requestPasswordReset(email: string, mailer: Mailer) {
     const user = await userRepository.findByEmail(normalizeEmail(email));

@@ -11,6 +11,7 @@ import { IS_PRODUCTION, WEB_ORIGIN } from "./lib/config.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { sessionPlugin } from "./plugins/session.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
+import { userRoutes } from "./modules/users/user.routes.js";
 import { geocodeRoutes } from "./modules/geocoding/geocode.routes.js";
 
 declare module "fastify" {
@@ -84,6 +85,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(authRoutes, { prefix: "/api/auth" });
   app.register(eventRoutes, { prefix: "/api/events" });
   app.register(geocodeRoutes, { prefix: "/api/geocode" });
+  app.register(userRoutes, { prefix: "/api/users" });
 
   return app;
 }

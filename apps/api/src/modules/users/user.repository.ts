@@ -45,4 +45,17 @@ export const userRepository = {
   findCredentialsById(id: string) {
     return prisma.user.findUnique({ where: { id }, select: { id: true, passwordHash: true } });
   },
+
+  updateProfile(id: string, data: { name: string | null }) {
+    return prisma.user.update({ where: { id }, data, select: publicUserSelect });
+  },
+
+  updatePasswordHash(id: string, passwordHash: string) {
+    return prisma.user.update({ where: { id }, data: { passwordHash }, select: { id: true } });
+  },
+
+  /** Sessions and tokens cascade; organized events keep existing with organizerId = null. */
+  delete(id: string) {
+    return prisma.user.delete({ where: { id }, select: { id: true } });
+  },
 };
