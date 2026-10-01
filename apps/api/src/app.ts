@@ -1,10 +1,14 @@
 import Fastify from "fastify";
+import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { ZodError } from "@repo/contracts";
 
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
+import { WEB_ORIGIN } from "./lib/config.js";
+import { authRoutes } from "./modules/auth/auth.routes.js";
+import { sessionPlugin } from "./plugins/session.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
 import { geocodeRoutes } from "./modules/geocoding/geocode.routes.js";
 
@@ -14,9 +18,14 @@ export function buildApp() {
   });
 
   app.register(cors, {
-    origin: "http://localhost:3000",
+    origin: WEB_ORIGIN,
     methods: ["GET", "POST", "PATCH", "DELETE"],
+    // The session cookie only travels on credentialed requests.
+    credentials: true,
   });
+
+  app.register(cookie);
+  app.register(sessionPlugin);
 
   app.register(multipart, {
     limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
@@ -54,6 +63,7 @@ export function buildApp() {
     };
   });
 
+  app.register(authRoutes, { prefix: "/api/auth" });
   app.register(eventRoutes, { prefix: "/api/events" });
   app.register(geocodeRoutes, { prefix: "/api/geocode" });
 

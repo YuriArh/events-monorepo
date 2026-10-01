@@ -3,9 +3,13 @@ import { afterAll, beforeEach } from "vitest";
 import { prisma } from "@repo/db";
 
 beforeEach(async () => {
-    // Events first: they hold the foreign key into Address.
+    // Children before parents: events hold FKs into Address and User; sessions
+    // and tokens into User.
     await prisma.event.deleteMany();
     await prisma.address.deleteMany();
+    await prisma.authToken.deleteMany();
+    await prisma.session.deleteMany();
+    await prisma.user.deleteMany();
 });
 
 afterAll(async () => {
