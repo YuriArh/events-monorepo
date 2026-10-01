@@ -23,6 +23,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@types/pg": "8.23.1",
+    "argon2": "^0.45.1",
     "dotenv": "17.4.2",
     "prisma": "7.10.0",
     "tsx": "4.23.13",

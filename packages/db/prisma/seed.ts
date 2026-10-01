@@ -1,3 +1,5 @@
+import argon2 from "argon2";
+
 import { prisma } from "../src/index.js";
 
 /**
@@ -8,6 +10,18 @@ import { prisma } from "../src/index.js";
 const seed = async () => {
   await prisma.event.deleteMany();
   await prisma.address.deleteMany();
+  await prisma.user.deleteMany(); // sessions and tokens cascade
+
+  // Same algorithm as the API (apps/api/src/lib/password.ts), so these log in.
+  const passwordHash = await argon2.hash("password123", { type: argon2.argon2id });
+  const verified = new Date();
+
+  await prisma.user.create({
+    data: { email: "admin@example.test", name: "Admin", role: "ADMIN", passwordHash, emailVerifiedAt: verified },
+  });
+  const user = await prisma.user.create({
+    data: { email: "user@example.test", name: "Sample User", passwordHash, emailVerifiedAt: verified },
+  });
 
   const townHall = await prisma.address.create({
     data: {
@@ -45,6 +59,7 @@ const seed = async () => {
         startsAt: from(7, 9),
         endsAt: from(8, 17),
         addressId: townHall.id,
+        organizerId: user.id,
       },
       {
         name: "Design review",
@@ -52,16 +67,22 @@ const seed = async () => {
         startsAt: from(2, 14),
         endsAt: from(2, 15),
         addressId: riverside.id,
+        organizerId: user.id,
       },
       // 1:1 — this event has no venue; riverside is already taken above.
-      { name: "Community meetup", startsAt: from(21, 18) },
+      { name: "Community meetup", startsAt: from(21, 18), organizerId: user.id },
       // No venue yet, to exercise the optional relation.
-      { name: "Unscheduled retro" },
+      { name: "Unscheduled retro", organizerId: user.id },
     ],
   });
 
-  const [addresses, events] = await Promise.all([prisma.address.count(), prisma.event.count()]);
-  console.log(`Seeded ${addresses} addresses and ${events} events.`);
+  const [users, addresses, events] = await Promise.all([
+    prisma.user.count(),
+    prisma.address.count(),
+    prisma.event.count(),
+  ]);
+  console.log(`Seeded ${users} users, ${addresses} addresses and ${events} events.`);
+  console.log("Sign in as admin@example.test or user@example.test, password: password123");
 };
 
 seed()
