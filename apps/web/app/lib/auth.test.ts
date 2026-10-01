@@ -64,6 +64,9 @@ describe("safeNext", () => {
         ["/.//evil.example", "/"],
         ["/..//evil.example", "/"],
         ["/a/..//evil.example", "/"],
+        // These make `new URL` throw rather than resolve.
+        ["//", "/"],
+        ["///", "/"],
     ])("%s → %s", (input, expected) => {
         expect(safeNext(input)).toBe(expected);
     });
