@@ -4,20 +4,16 @@ import { useState } from "react";
 import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarIcon, Loader2Icon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CalendarIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import { DeleteEventDialog } from "@/components/delete-event-dialog";
+import { Spinner } from "@/components/spinner";
 import { Button, buttonStyleProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 import { canModifyEvent, useMe } from "@/lib/auth";
 import { type EventRecord, eventKeys, eventsApi } from "@/lib/events";
-
-const spin = stylex.keyframes({
-    from: { transform: "rotate(0deg)" },
-    to: { transform: "rotate(360deg)" },
-});
 
 const styles = stylex.create({
     page: {
@@ -157,12 +153,6 @@ const styles = stylex.create({
         color: "inherit",
         textDecoration: { default: "none", ":hover": "underline" },
     },
-    spinner: {
-        animationName: spin,
-        animationDuration: "1s",
-        animationIterationCount: "infinite",
-        animationTimingFunction: "linear",
-    },
 });
 
 const formatDate = (value: string) =>
@@ -213,7 +203,7 @@ export default function HomePage() {
                     <CardContent style={styles.cardContent}>
                         {isPending ? (
                             <div {...stylex.props(styles.stateBox, typography.sm)}>
-                                <Loader2Icon {...stylex.props(styles.spinner)} size={16} />
+                                <Spinner size={16} />
                                 Loading events…
                             </div>
                         ) : events.length === 0 ? (

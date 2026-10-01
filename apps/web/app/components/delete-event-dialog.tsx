@@ -2,7 +2,6 @@
 
 import * as stylex from "@stylexjs/stylex";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2Icon } from "lucide-react";
 
 import {
     AlertDialog,
@@ -14,13 +13,9 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Spinner } from "@/components/spinner";
 import { type EventRecord, eventKeys, eventsApi } from "@/lib/events";
 import { colors, typography } from "@/styles/tokens.stylex";
-
-const spin = stylex.keyframes({
-    from: { transform: "rotate(0deg)" },
-    to: { transform: "rotate(360deg)" },
-});
 
 const styles = stylex.create({
     destructiveAction: {
@@ -29,12 +24,6 @@ const styles = stylex.create({
             ":hover": `color-mix(in oklab, ${colors.destructive} 90%, transparent)`,
         },
         color: "#fff",
-    },
-    spinner: {
-        animationName: spin,
-        animationDuration: "1s",
-        animationIterationCount: "infinite",
-        animationTimingFunction: "linear",
     },
     error: { color: colors.destructive },
 });
@@ -45,7 +34,7 @@ export function DeleteEventDialog({
     onClose,
     onDeleted,
 }: {
-    event: EventRecord | null;
+    event: Pick<EventRecord, "id" | "name"> | null;
     onClose: () => void;
     onDeleted?: () => void;
 }) {
@@ -85,7 +74,7 @@ export function DeleteEventDialog({
                         style={styles.destructiveAction}
                         disabled={remove.isPending}
                         onClick={() => event && remove.mutate(event.id)}>
-                        {remove.isPending && <Loader2Icon {...stylex.props(styles.spinner)} />}
+                        {remove.isPending && <Spinner />}
                         Delete
                     </AlertDialogAction>
                 </AlertDialogFooter>
