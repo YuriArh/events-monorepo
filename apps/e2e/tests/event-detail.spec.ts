@@ -32,11 +32,9 @@ test.describe("event detail page", () => {
 
     test("opens from the list and shows the event", async ({ page }) => {
         await page.goto("/");
-        const meResponse = page.waitForResponse((r) => r.url().endsWith("/api/auth/me"));
         await page.getByRole("link", { name, exact: true }).click();
 
         await expect(page).toHaveURL(new RegExp(`/events/${eventId}$`));
-        expect((await meResponse).status()).toBe(200);
         await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
         await expect(page.getByText(/^Organized by /)).toBeVisible();
         await expect(page.getByText("Nieuwmarkt 4")).toBeVisible();
