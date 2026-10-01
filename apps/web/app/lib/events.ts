@@ -1,9 +1,4 @@
-import type {
-    CreateAddressInput,
-    CreateEventInput,
-    UpdateAddressInput,
-    UpdateEventInput,
-} from "@repo/contracts";
+import type { CreateEventInput, UpdateEventInput } from "@repo/contracts";
 
 import { API_URL, request } from "./api";
 
@@ -54,13 +49,6 @@ export const eventsApi = {
     update: (id: string, data: UpdateEventInput) =>
         request<EventRecord>(`/api/events/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/api/events/${id}`, { method: "DELETE" }),
-};
-
-export const addressesApi = {
-    create: (data: CreateAddressInput) =>
-        request<Address>("/api/addresses", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: string, data: UpdateAddressInput) =>
-        request<Address>(`/api/addresses/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 };
 
 /**

@@ -8,14 +8,8 @@ import { Loader2Icon } from "lucide-react";
 
 import { EventForm } from "@/components/event-form";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-    resolveAddressId,
-    resolveImageKey,
-    toEventInput,
-    toFormValues,
-    type EventFormValues,
-} from "@/lib/event-form";
-import { addressesApi, eventKeys, eventsApi, uploadImage } from "@/lib/events";
+import { resolveImageKey, toEventInput, toFormValues, type EventFormValues } from "@/lib/event-form";
+import { eventKeys, eventsApi, uploadImage } from "@/lib/events";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } });
@@ -62,10 +56,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     const updateEvent = useMutation({
         mutationFn: async (values: EventFormValues) => {
             const imageKey = await resolveImageKey(values, uploadImage);
-            const addressId = await resolveAddressId(values, event?.addressId ?? null, addressesApi);
-            const input = toEventInput(values, { imageKey, addressId });
 
-            return eventsApi.update(id, input);
+            return eventsApi.update(id, toEventInput(values, { imageKey }));
         },
         onSuccess: async () => {
             // eventKeys.all (["events"]) is a prefix of eventKeys.detail(id)

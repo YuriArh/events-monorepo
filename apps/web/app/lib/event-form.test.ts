@@ -1,12 +1,11 @@
 import { createEventInput } from "@repo/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, type EventRecord } from "./events";
+import type { EventRecord } from "./events";
 import {
     emptyFormValues,
     formLevelError,
     issuesByField,
-    resolveAddressId,
     resolveImageKey,
     toAddressInput,
     toEventInput,
@@ -204,24 +203,43 @@ describe("toFormValues", () => {
 
 describe("toEventInput", () => {
     it("serialises dates back to ISO with an offset", () => {
-        const input = toEventInput(toFormValues(record), { imageKey: null, addressId: null });
+        const input = toEventInput(toFormValues(record), { imageKey: null });
 
         expect(input.startsAt).toBe("2026-10-01T18:00:00.000Z");
     });
 
-    it("passes through the resolved image key and address id", () => {
-        const input = toEventInput(emptyFormValues(), { imageKey: "x.png", addressId: "a9" });
+    it("passes through the resolved image key", () => {
+        const input = toEventInput(emptyFormValues(), { imageKey: "x.png" });
 
-        expect(input).toMatchObject({ imageKey: "x.png", addressId: "a9" });
+        expect(input).toMatchObject({ imageKey: "x.png" });
+    });
+
+    it("embeds the selected venue", () => {
+        const input = toEventInput({ ...emptyFormValues(), address: SUGGESTION }, { imageKey: null });
+
+        expect(input.address).toEqual(toAddressInput(SUGGESTION));
+    });
+
+    // On an edit, null is what tells the API to delete the venue.
+    it("sends null when no venue is selected", () => {
+        const input = toEventInput(emptyFormValues(), { imageKey: null });
+
+        expect(input.address).toBeNull();
     });
 
     it("sends empty text as null rather than an empty string", () => {
-        const input = toEventInput(
-            { ...emptyFormValues(), name: "Only a name" },
-            { imageKey: null, addressId: null },
-        );
+        const input = toEventInput({ ...emptyFormValues(), name: "Only a name" }, { imageKey: null });
 
         expect(input.description).toBeNull();
+    });
+
+    it("produces a payload the contract accepts", () => {
+        const input = toEventInput(
+            { ...emptyFormValues(), name: "Valid", address: SUGGESTION },
+            { imageKey: null },
+        );
+
+        expect(createEventInput.safeParse(input).success).toBe(true);
     });
 });
 
@@ -261,100 +279,6 @@ describe("resolveImageKey", () => {
 
         await expect(resolveImageKey(values, upload)).resolves.toBe("new.png");
         expect(upload).toHaveBeenCalledWith(file);
-    });
-});
-
-describe("resolveAddressId with a selected address", () => {
-    it("returns null when no address is selected", async () => {
-        const api = { create: vi.fn(), update: vi.fn() };
-
-        await expect(
-            resolveAddressId({ ...emptyFormValues(), address: null }, null, api),
-        ).resolves.toBeNull();
-        expect(api.create).not.toHaveBeenCalled();
-    });
-
-    it("creates an address from the selection", async () => {
-        const api = { create: vi.fn().mockResolvedValue({ id: "a1" }), update: vi.fn() };
-
-        await expect(
-            resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, null, api),
-        ).resolves.toBe("a1");
-        expect(api.create).toHaveBeenCalledWith(toAddressInput(SUGGESTION));
-    });
-
-    it("updates the existing address in place", async () => {
-        const api = { create: vi.fn(), update: vi.fn().mockResolvedValue({ id: "a1" }) };
-
-        await expect(
-            resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, "a1", api),
-        ).resolves.toBe("a1");
-        expect(api.update).toHaveBeenCalledWith("a1", toAddressInput(SUGGESTION));
-        expect(api.create).not.toHaveBeenCalled();
-    });
-
-    it("detaches when the address is cleared on an event that had one", async () => {
-        const api = { create: vi.fn(), update: vi.fn() };
-
-        await expect(
-            resolveAddressId({ ...emptyFormValues(), address: null }, "existing", api),
-        ).resolves.toBeNull();
-        expect(api.update).not.toHaveBeenCalled();
-    });
-
-    // Regression: the address contract's issues key by "city", "line1", etc.,
-    // but the form only renders inline errors under "address.city",
-    // "address.line1", etc. Without this prefixing, a server rejection wrote
-    // to dead state nothing reads.
-    it("prefixes a create rejection's issue paths with 'address'", async () => {
-        const calls = {
-            create: vi.fn().mockRejectedValue(
-                new ApiError("Validation error", 400, [
-                    { path: ["city"], message: "Too big: expected string to have <=255 characters" },
-                ]),
-            ),
-            update: vi.fn(),
-        };
-
-        const failure = resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, null, calls);
-
-        await expect(failure).rejects.toBeInstanceOf(ApiError);
-        await failure.catch((error: ApiError) => {
-            expect(error.issues).toEqual([
-                { path: ["address", "city"], message: "Too big: expected string to have <=255 characters" },
-            ]);
-        });
-    });
-
-    it("prefixes an update rejection's issue paths with 'address'", async () => {
-        const calls = {
-            create: vi.fn(),
-            update: vi
-                .fn()
-                .mockRejectedValue(
-                    new ApiError("Validation error", 400, [{ path: ["line1"], message: "Too long" }]),
-                ),
-        };
-
-        const failure = resolveAddressId(
-            { ...emptyFormValues(), address: SUGGESTION },
-            "existing",
-            calls,
-        );
-
-        await expect(failure).rejects.toBeInstanceOf(ApiError);
-        await failure.catch((error: ApiError) => {
-            expect(error.issues).toEqual([{ path: ["address", "line1"], message: "Too long" }]);
-        });
-    });
-
-    it("rethrows a rejection with no issues unchanged", async () => {
-        const notFound = new ApiError("Address not found", 404);
-        const calls = { create: vi.fn().mockRejectedValue(notFound), update: vi.fn() };
-
-        await expect(
-            resolveAddressId({ ...emptyFormValues(), address: SUGGESTION }, null, calls),
-        ).rejects.toBe(notFound);
     });
 });
 

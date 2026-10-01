@@ -24,12 +24,11 @@ const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { trans
 const INLINE_FIELDS = new Set<string>(["name", "description", "startsAt", "endsAt", "address"]);
 
 /**
- * `resolveAddressId` prefixes every rejected address issue path with
- * "address" (see event-form.ts), so a real error key is "address.city",
- * "address.line1", etc. — never the bare "address" that `INLINE_FIELDS`
- * lists. This is the one shared check both `bannerMessage` and the address
- * field's inline renderer use, so "address" only has to mean "starts with
- * address" in one place.
+ * The venue is nested in the event payload, so the server reports its errors
+ * at paths like "address.city" — never the bare "address" that
+ * `INLINE_FIELDS` lists. This is the one shared check both `bannerMessage`
+ * and the address field's inline renderer use, so "address" only has to mean
+ * "starts with address" in one place.
  */
 function isInlineField(field: string): boolean {
     return INLINE_FIELDS.has(field) || field.startsWith("address.");
@@ -128,9 +127,7 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
         },
         onSubmit: async ({ value }) => {
             // The contract is the authority; the field rules above are just fast feedback.
-            const parsed = createEventInput.safeParse(
-                toEventInput(value, { imageKey: null, addressId: null }),
-            );
+            const parsed = createEventInput.safeParse(toEventInput(value, { imageKey: null }));
 
             if (!parsed.success) {
                 const fields = issuesByField(parsed.error.issues);
@@ -150,11 +147,10 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                 if (error instanceof ApiError && error.issues) {
                     const fields = issuesByField(error.issues);
                     setFieldErrors(fields);
-                    // `resolveAddressId` prefixes address-contract issue paths
-                    // ("city", "line1", ...) with "address" before this catch ever
-                    // sees them, so `fields` keys line up with the inline
-                    // renderers below. The banner is then only for whatever, if
-                    // anything, still has no inline renderer.
+                    // Venue issues arrive as "address.<field>" because the
+                    // venue is nested in the payload, so `fields` keys line up
+                    // with the inline renderers below. The banner is then only
+                    // for whatever, if anything, still has no inline renderer.
                     setSubmitError(bannerMessage(fields, error.message));
                 } else {
                     setSubmitError(error instanceof Error ? error.message : "Something went wrong");
