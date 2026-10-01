@@ -40,7 +40,7 @@ need a form.
 
 ## API module layering
 
-Modules: `events/`, `geocoding/`.
+Modules: `auth/`, `users/`, `events/`, `geocoding/`.
 
 Each feature under `apps/api/src/modules/<name>/` splits into four files, and the
 dependency direction only ever points down:
@@ -121,6 +121,45 @@ Addresses store the full Photon feature in `Address.raw` alongside the derived
 columns and `lat`/`lon`/`osmId`. All of those are nullable: addresses created
 before geocoding existed have none of them.
 
+## Authentication
+
+Self-built, email + password. Full design: `docs/superpowers/specs/2026-10-01-auth-design.md`.
+
+- **Sessions** live in Postgres. The `sid` cookie (`HttpOnly`, `SameSite=Lax`,
+  `Secure` in production) carries a random 32-byte token; `Session.tokenHash`
+  stores only its sha256. 30-day lifetime, renewed at most once a day.
+- **`plugins/session.ts`** resolves the cookie on every request into
+  `request.user` (a `PublicUser`, never containing `passwordHash`).
+  `requireAuth` -> 401, `requireRole` -> 403. Handlers behind `requireAuth` read
+  the user with `currentUser(request)`.
+- **Authorization** is in services, not routes: `canModify` in
+  `event.service.ts` allows the organizer or an admin.
+- **One-shot tokens** (`AuthToken`: password reset, email verification) are
+  hashed the same way and redeemed with a conditional `updateMany`, which is
+  what makes them single-use under concurrency.
+- **Mail** goes through the `Mailer` interface (`lib/mailer.ts`): logged to
+  the console in development, captured in memory in tests. There is no real
+  provider yet, so `buildApp` throws when `NODE_ENV=production` and no
+  `Mailer` is injected.
+- **No account-existence leak**: `POST /api/auth/password/forgot` replies 204
+  immediately and runs the reset work fire-and-forget (failures are logged by
+  error name only), so neither timing nor mailer errors reveal whether an
+  account exists. Registration creates the user and session first, then sends
+  the verification email best-effort: a mail failure doesn't fail it.
+- **CSRF**: `SameSite=Lax` plus an `Origin` check on POST/PATCH/PUT/DELETE. A
+  request whose `Origin` header is present and differs from `WEB_ORIGIN` is
+  rejected (403); requests with no `Origin` (curl, server-to-server, tests)
+  pass. `WEB_ORIGIN` is normalized with `new URL(...).origin`.
+- **Rate limits** (`lib/rate-limits.ts`) are in memory, per process, and run
+  at `preHandler` so keys can use the body or `request.user`. They cover
+  register, login, password forgot/reset, email verify/resend, password change
+  and `DELETE /api/users/me` (password re-check). Keys use `clientKey(ip)`,
+  which groups IPv6 addresses by /64. Behind a reverse proxy, configure
+  Fastify's `trustProxy`, or every client shares one IP bucket.
+- **Event images**: the service rejects (409) an `imageKey` that another event
+  already uses, so one user can't make the server delete another user's
+  uploaded file. An uploaded file not yet attached to an event has no owner.
+
 ## Error handling
 
 Routes translate domain errors into responses. The global error handler in
@@ -167,6 +206,13 @@ prisma migrate resolve --applied <migration_name>
 Prisma blocks AI agents from running destructive migrate commands unless
 `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` is set to the user's consent text.
 
+## Dev seed
+
+`packages/db/prisma/seed.ts` creates `admin@example.test` and
+`user@example.test` (password `password123`); the regular user owns the sample
+events. It wipes users, events and addresses first, so never run it against a
+database holding real data. It has no production guard.
+
 ## Image uploads
 
 `POST /api/events/upload` takes a multipart file and returns `{ imageKey }`;
@@ -190,6 +236,7 @@ development; production needs object storage.
 | --------------------- | -------- | ----------------------------------------- |
 | `DATABASE_URL`        | api, db  | `apps/api/.env`, `packages/db/.env`        |
 | `NEXT_PUBLIC_API_URL` | web      | `apps/web/.env.local`, defaults to :4000   |
+| `WEB_ORIGIN`          | api      | CORS origin, Origin check, links in emails. Defaults to `http://localhost:3000` |
 
 `.env` files are gitignored; `packages/db/.env.example` is the reference.
 
@@ -199,3 +246,5 @@ The API allows exactly the web origin and the methods actually in use
 (`GET, POST, PATCH, DELETE`). `@fastify/cors` defaults to `GET,HEAD,POST`, so
 any new method must be added explicitly or the browser will block it while
 curl keeps working. There is a regression test for this.
+
+Requests are credentialed (`credentials: true`) so the session cookie is sent; this requires an exact origin, never `*`.

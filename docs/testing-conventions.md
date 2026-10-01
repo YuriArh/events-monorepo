@@ -38,6 +38,19 @@ calculation, non-trivial invariants. A passthrough plus a not-found throw isn't.
   `@repo/db` builds its connection pool at import time.
 - `pnpm test` runs `test:db:migrate` (`prisma migrate deploy`) first, so the
   test database is always at the latest migration.
+- Signed-in requests: `signUp(app)` from `src/test/auth.ts` registers a fresh
+  user through the real endpoint and returns `{ user, cookie, email, password }`;
+  send `headers: { cookie }`. `makeAdmin(user.id)` promotes one;
+  `sessionCookieFrom(response)` extracts the cookie; `TEST_PASSWORD` is the
+  default password.
+- Build the app with `buildApp({ rateLimits: false })` — every suite signs up
+  more often than the limits allow. Only `app.security.test.ts` keeps them on.
+- Email flows: `buildApp({ mailer: new MemoryMailer() })`, then
+  `mailer.tokenFor(email)` returns the token from the latest link. Some mail is
+  sent asynchronously (forgot-password is fire-and-forget), so wait for it
+  first (`mailArrived(n)` in `auth.email.test.ts`, a `vi.waitFor` on
+  `mailer.messages`) instead of asserting right after the response.
+- `vitest.setup.ts` also truncates `AuthToken`, `Session` and `User`.
 
 The API logger is silenced when `NODE_ENV === "test"`.
 
