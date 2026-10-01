@@ -511,8 +511,9 @@ Per `docs/testing-conventions.md`: integration first, against `eventapp_test`.
   state, so each spec doesn't repeat the login UI.
 - Cleanup: users are created with unique emails and removed through
   `DELETE /api/users/me`; the teardown project deletes the run's events and
-  then its user; a run killed before teardown leaves one uniquely-named
-  `e2e-*` user behind.
+  then its user; a run killed before teardown leaves its uniquely-named
+  `e2e-*` user and that user's events behind (the next run's sweep runs as a
+  different user, gets `403` on them and skips them).
 
 ## Delivery order
 

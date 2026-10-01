@@ -168,15 +168,17 @@ async function pickDateTime(
  * the end only cleans up *after* a full run completes, so an interrupted
  * run's leftovers would otherwise survive until some later run reaches its
  * own end — and never get cleaned at all if that run also fails early.
- * Running the sweep before anything else guarantees every run starts clean,
- * regardless of how the previous one ended.
+ * The sweep runs as this run's e2e user, so it can only remove that user's
+ * own events (e.g. from an earlier test in this run that failed mid-way).
  */
 async function sweepLeftoverEvents(request: APIRequestContext) {
     const response = await request.get(`${API_URL}/api/events`);
     const events: Array<{ id: string; name: string }> = await response.json();
 
     // Deleting an event deletes its venue too. Events of other (earlier-run)
-    // users answer 403; their own teardown removed them already.
+    // users answer 403 and are skipped: normally their run's teardown removed
+    // them, but a run killed before teardown leaves its e2e-* user AND that
+    // user's events behind, and this sweep cannot remove them.
     for (const event of events.filter((candidate) => candidate.name.startsWith("E2E event"))) {
         await request.delete(`${API_URL}/api/events/${event.id}`);
     }
