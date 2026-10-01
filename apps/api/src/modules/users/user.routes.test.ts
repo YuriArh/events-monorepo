@@ -67,6 +67,17 @@ describe("POST /api/auth/password/change", () => {
         expect((await me(otherDevice)).statusCode).toBe(401);
     });
 
+    it("makes the new password the only one that logs in", async () => {
+        const { cookie, email } = await signUp(app);
+
+        expect((await change(cookie, TEST_PASSWORD)).statusCode).toBe(204);
+
+        const login = (password: string) =>
+            app.inject({ method: "POST", url: "/api/auth/login", payload: { email, password } });
+        expect((await login("a brand new password")).statusCode).toBe(200);
+        expect((await login(TEST_PASSWORD)).statusCode).toBe(401);
+    });
+
     it("rejects a wrong current password", async () => {
         const { cookie } = await signUp(app);
 

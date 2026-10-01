@@ -1,5 +1,4 @@
 import { hashPassword, verifyPassword } from "../../lib/password.js";
-import { authRepository } from "../auth/auth.repository.js";
 import { userRepository } from "./user.repository.js";
 import type { ChangePasswordInput, UpdateProfileInput } from "./user.types.js";
 
@@ -28,8 +27,7 @@ export const userService = {
   async changePassword(userId: string, currentSessionId: string, input: ChangePasswordInput) {
     await assertPassword(userId, input.currentPassword);
 
-    await userRepository.updatePasswordHash(userId, await hashPassword(input.newPassword));
-    await authRepository.deleteUserSessions(userId, currentSessionId);
+    await userRepository.changePassword(userId, await hashPassword(input.newPassword), currentSessionId);
   },
 
   async deleteAccount(userId: string, password: string) {

@@ -50,8 +50,16 @@ export const userRepository = {
     return prisma.user.update({ where: { id }, data, select: publicUserSelect });
   },
 
-  updatePasswordHash(id: string, passwordHash: string) {
-    return prisma.user.update({ where: { id }, data: { passwordHash }, select: { id: true } });
+  /**
+   * New hash and the sign-out of every other session in one transaction: a
+   * failure between the two must not leave a stolen session alive under the
+   * new password.
+   */
+  changePassword(id: string, passwordHash: string, keepSessionId: string) {
+    return prisma.$transaction([
+      prisma.user.update({ where: { id }, data: { passwordHash }, select: { id: true } }),
+      prisma.session.deleteMany({ where: { userId: id, id: { not: keepSessionId } } }),
+    ]);
   },
 
   /** Sessions and tokens cascade; organized events keep existing with organizerId = null. */
