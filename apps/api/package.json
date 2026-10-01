@@ -14,12 +14,16 @@
     "test:db:migrate": "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/eventapp_test pnpm --filter @repo/db exec prisma migrate deploy"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@fastify/multipart": "^10.1.1",
+    "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^10.1.4",
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
-    "fastify": "^5.12.5"
+    "argon2": "^0.45.1",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
