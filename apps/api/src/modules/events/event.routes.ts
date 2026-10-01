@@ -20,6 +20,7 @@ import {
 import {
   EventNotFoundError,
   ForbiddenError,
+  ImageInUseError,
   InvalidEventDateRangeError,
   eventService,
 } from "./event.service.js";
@@ -36,6 +37,10 @@ const replyForDomainError = (error: unknown, reply: FastifyReply) => {
 
   if (error instanceof ForbiddenError) {
     return reply.status(403).send({ message: error.message });
+  }
+
+  if (error instanceof ImageInUseError) {
+    return reply.status(409).send({ message: error.message });
   }
 
   throw error;

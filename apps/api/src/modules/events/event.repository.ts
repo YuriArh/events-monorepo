@@ -49,6 +49,10 @@ export const eventRepository = {
   },
 
   /** organizerId comes from the session, never from the request body. */
+  findByImageKey(imageKey: string) {
+    return prisma.event.findFirst({ where: { imageKey }, select: { id: true } });
+  },
+
   create({ address, ...data }: CreateEventInput, organizerId: string) {
     return prisma.event.create({
       data: {

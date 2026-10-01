@@ -593,6 +593,73 @@ describe("ownership", () => {
         expect((await patch(created.id, admin.cookie)).statusCode).toBe(200);
     });
 
+    it("rejects creating an event with an image another event already uses, keeping the file", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        await createEvent({ imageKey });
+        const other = await signUp(app);
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { name: "Stolen", imageKey },
+        });
+
+        expect(response.statusCode).toBe(409);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
+    it("rejects updating to an image another event already uses", async () => {
+        const { imageKey } = (await uploadFile(PNG_FIXTURE)).json<{ imageKey: string }>();
+        await createEvent({ imageKey });
+        const other = await signUp(app);
+        const mine = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { name: "Mine" },
+        });
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${mine.json().id}`,
+            headers: { "content-type": "application/json", cookie: other.cookie },
+            payload: { imageKey },
+        });
+
+        expect(response.statusCode).toBe(409);
+        await expect(readdir(UPLOADS_DIR)).resolves.toContain(imageKey);
+    });
+
+    it("keeps the event after a forbidden delete", async () => {
+        const created = await createEvent();
+        const stranger = await signUp(app);
+
+        await app.inject({
+            method: "DELETE",
+            url: `/api/events/${created.id}`,
+            headers: { cookie: stranger.cookie },
+        });
+
+        const after = await app.inject({ method: "GET", url: `/api/events/${created.id}` });
+        expect(after.statusCode).toBe(200);
+    });
+
+    it("ignores an organizerId in a PATCH body", async () => {
+        const created = await createEvent();
+        const other = await signUp(app);
+
+        const response = await app.inject({
+            method: "PATCH",
+            url: `/api/events/${created.id}`,
+            headers: { "content-type": "application/json", cookie },
+            payload: { name: "Renamed", organizerId: other.user.id },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().organizerId).toBe(created.organizerId);
+    });
+
     it("is 401, not 403, when anonymous", async () => {
         const created = await createEvent();
 

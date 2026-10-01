@@ -18,6 +18,13 @@ export class InvalidEventDateRangeError extends Error {
   }
 }
 
+export class ImageInUseError extends Error {
+  constructor() {
+    super("This image belongs to another event");
+    this.name = "ImageInUseError";
+  }
+}
+
 export class ForbiddenError extends Error {
   constructor() {
     super("You can only change events you organize");
@@ -33,6 +40,16 @@ type Actor = { id: string; role: UserRole };
  */
 export const canModify = (event: { organizerId: string | null }, actor: Actor) =>
   actor.role === "ADMIN" || (event.organizerId !== null && event.organizerId === actor.id);
+
+/** Image keys are public via GET, so a key already used by another event must
+ *  not be claimed: deleting that event would unlink the original owner's file. */
+const assertImageFree = async (imageKey: string | null | undefined, exceptEventId?: string) => {
+  if (!imageKey) return;
+
+  const holder = await eventRepository.findByImageKey(imageKey);
+
+  if (holder && holder.id !== exceptEventId) throw new ImageInUseError();
+};
 
 const assertCanModify = (event: { organizerId: string | null }, actor: Actor) => {
   if (!canModify(event, actor)) throw new ForbiddenError();
@@ -72,6 +89,7 @@ export const eventService = {
 
   async create(input: CreateEventInput, actor: Actor) {
     assertDateRange(input.startsAt, input.endsAt);
+    await assertImageFree(input.imageKey);
 
     return eventRepository.create(input, actor.id);
   },
@@ -79,6 +97,10 @@ export const eventService = {
   async update(id: string, input: UpdateEventInput, actor: Actor) {
     const existing = await this.getById(id);
     assertCanModify(existing, actor);
+
+    if (input.imageKey !== existing.imageKey) {
+      await assertImageFree(input.imageKey, id);
+    }
 
     // Checked against the merged result: a payload carrying only one of the two
     // dates can still be invalid once combined with what is already stored.
