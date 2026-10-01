@@ -8,8 +8,8 @@ import { publicUserSelect } from "../users/user.repository.js";
  * count === 1. Unknown, wrong-type, used and expired tokens all return null.
  */
 const consumeToken = async (tx: Prisma.TransactionClient, tokenHash: string, type: AuthTokenType) => {
-  const token = await tx.authToken.findUnique({ where: { tokenHash } });
-  if (!token || token.type !== type) return null;
+  const token = await tx.authToken.findFirst({ where: { tokenHash, type } });
+  if (!token) return null;
 
   const now = new Date();
   const { count } = await tx.authToken.updateMany({

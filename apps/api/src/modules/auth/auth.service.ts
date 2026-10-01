@@ -77,9 +77,16 @@ export const authService = {
 
     if (!user) throw new EmailTakenError();
 
-    await sendVerification(user, mailer);
+    const session = await startSession(user.id, meta);
 
-    return { user, session: await startSession(user.id, meta) };
+    // Best-effort: the account exists, so a mail outage must not fail registration.
+    // The user can ask for a new link via /email/resend; the route logs the error name.
+    const mailError = await sendVerification(user, mailer).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    return { user, session, mailError };
   },
 
   async login(input: LoginInput, meta: SessionMeta) {

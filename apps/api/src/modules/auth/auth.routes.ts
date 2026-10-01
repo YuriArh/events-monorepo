@@ -34,6 +34,9 @@ const replyForDomainError = (error: unknown, reply: FastifyReply) => {
   throw error;
 };
 
+/** Only the error's name is logged: messages from providers may echo addresses or links. */
+const errorName = (error: unknown) => (error instanceof Error ? error.name : "unknown");
+
 const sessionMeta = (request: FastifyRequest): SessionMeta => ({
   userAgent: request.headers["user-agent"] ?? null,
   ip: request.ip,
@@ -44,7 +47,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const input = registerSchema.parse(request.body);
 
     try {
-      const { user, session } = await authService.register(input, sessionMeta(request), app.mailer);
+      const { user, session, mailError } = await authService.register(
+        input,
+        sessionMeta(request),
+        app.mailer,
+      );
+
+      if (mailError) request.log.error({ err: errorName(mailError) }, "verification mail failed");
       setSessionCookie(reply, session.token, session.expiresAt);
 
       return reply.status(201).send({ user });
@@ -81,9 +90,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post("/password/forgot", async (request, reply) => {
     const { email } = forgotPasswordSchema.parse(request.body);
 
-    await authService.requestPasswordReset(email, app.mailer);
+    // Neither awaited nor allowed to fail the request: timing and errors must not
+    // reveal whether the account exists, so the answer is always an immediate 204.
+    void authService
+      .requestPasswordReset(email, app.mailer)
+      .catch((error: unknown) => request.log.error({ err: errorName(error) }, "password reset mail failed"));
 
-    // Always 204, so this endpoint can't be used to find out who has an account.
     return reply.status(204).send();
   });
 

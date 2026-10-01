@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@repo/db";
 
 import { buildApp } from "../../app.js";
-import { MemoryMailer } from "../../lib/mailer.js";
+import { type Mailer, MemoryMailer } from "../../lib/mailer.js";
 import { TEST_PASSWORD, signUp } from "../../test/auth.js";
 
 let app: FastifyInstance;
@@ -29,6 +29,9 @@ const post = (url: string, payload: unknown, cookie?: string) =>
 
 const NEW_PASSWORD = "a brand new password";
 
+/** The forgot endpoint answers before the mail is sent, so wait for it to arrive. */
+const mailArrived = (count: number) => vi.waitFor(() => expect(mailer.messages.length).toBe(count));
+
 describe("email verification", () => {
     it("mails a link on registration and verifies with it", async () => {
         const { email, cookie } = await signUp(app);
@@ -46,7 +49,7 @@ describe("email verification", () => {
         const { email } = await signUp(app);
         const token = mailer.tokenFor(email);
 
-        await post("/api/auth/email/verify", { token });
+        expect((await post("/api/auth/email/verify", { token })).statusCode).toBe(204);
         const second = await post("/api/auth/email/verify", { token });
 
         expect(second.statusCode).toBe(400);
@@ -77,6 +80,7 @@ describe("password reset", () => {
 
         const known = await post("/api/auth/password/forgot", { email });
         const unknown = await post("/api/auth/password/forgot", { email: "nobody@example.test" });
+        await mailArrived(1);
 
         expect(known.statusCode).toBe(204);
         expect(unknown.statusCode).toBe(204);
@@ -85,13 +89,17 @@ describe("password reset", () => {
 
     it("sets the new password once and signs out every session", async () => {
         const { email, cookie } = await signUp(app);
+        const other = await signUp(app);
+        mailer.messages.length = 0;
         await post("/api/auth/password/forgot", { email });
+        await mailArrived(1);
         const token = mailer.tokenFor(email);
 
         const reset = await post("/api/auth/password/reset", { token, newPassword: NEW_PASSWORD });
 
         expect(reset.statusCode).toBe(204);
-        expect(await prisma.session.count()).toBe(0);
+        const otherMe = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie: other.cookie } });
+        expect(otherMe.statusCode).toBe(200);
         const me = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
         expect(me.statusCode).toBe(401);
 
@@ -106,7 +114,9 @@ describe("password reset", () => {
 
     it("rejects an expired link", async () => {
         const { email } = await signUp(app);
+        mailer.messages.length = 0;
         await post("/api/auth/password/forgot", { email });
+        await mailArrived(1);
         await prisma.authToken.updateMany({
             where: { type: "PASSWORD_RESET" },
             data: { expiresAt: new Date(Date.now() - 1000) },
@@ -123,23 +133,46 @@ describe("password reset", () => {
     // A verification link must never work as a password reset.
     it("rejects a token of the wrong type", async () => {
         const { email } = await signUp(app);
+        const token = mailer.tokenFor(email);
 
-        const response = await post("/api/auth/password/reset", {
-            token: mailer.tokenFor(email),
-            newPassword: NEW_PASSWORD,
-        });
+        const response = await post("/api/auth/password/reset", { token, newPassword: NEW_PASSWORD });
 
         expect(response.statusCode).toBe(400);
+        expect((await post("/api/auth/email/verify", { token })).statusCode).toBe(204);
     });
 
     it("retires older reset links when a new one is requested", async () => {
         const { email } = await signUp(app);
+        mailer.messages.length = 0;
         await post("/api/auth/password/forgot", { email });
+        await mailArrived(1);
         const first = mailer.tokenFor(email);
         await post("/api/auth/password/forgot", { email });
+        await mailArrived(2);
 
         const response = await post("/api/auth/password/reset", { token: first, newPassword: NEW_PASSWORD });
 
         expect(response.statusCode).toBe(400);
+    });
+});
+
+describe("when the mail provider is down", () => {
+    it("still registers the user and signs them in", async () => {
+        const failing: Mailer = {
+            send: async () => {
+                throw new Error("provider down");
+            },
+        };
+        const broken = buildApp({ mailer: failing });
+        await broken.ready();
+
+        try {
+            const { cookie } = await signUp(broken);
+            const me = await broken.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+
+            expect(me.statusCode).toBe(200);
+        } finally {
+            await broken.close();
+        }
     });
 });

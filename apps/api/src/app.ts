@@ -7,7 +7,7 @@ import { ZodError } from "@repo/contracts";
 
 import { ConsoleMailer, type Mailer } from "./lib/mailer.js";
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
-import { WEB_ORIGIN } from "./lib/config.js";
+import { IS_PRODUCTION, WEB_ORIGIN } from "./lib/config.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { sessionPlugin } from "./plugins/session.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
@@ -25,6 +25,10 @@ export type BuildAppOptions = {
 };
 
 export function buildApp(options: BuildAppOptions = {}) {
+  if (IS_PRODUCTION && !options.mailer) {
+    throw new Error("A real Mailer must be configured in production");
+  }
+
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test",
   });
