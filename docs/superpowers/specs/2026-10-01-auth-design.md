@@ -330,8 +330,7 @@ instead:
   - `null` → venue removed (the `Address` row is deleted);
   - an object → venue created, or the existing one updated in place.
 - `event.service` writes the event and its address in one transaction, after
-  `assertCanModify`. `address.repository.ts` stays, now called only from the
-  event service.
+  `assertCanModify`. The `addresses` module is deleted: the event repository writes the venue with Prisma nested writes (`create` / `upsert` / `delete`), so nothing calls an address repository.
 - Deleting an event deletes its address in the same transaction, so addresses
   no longer outlive their event (today they are orphaned — see the E2E
   cleanup note in `docs/testing-conventions.md`, which this removes the need

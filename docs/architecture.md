@@ -31,8 +31,7 @@ The web app talks to the API over HTTP; it does not import `@repo/db`. Only
 
 - `/` — the event list.
 - `/events/new` — create form.
-- `/events/[id]/edit` — edit form, including updating the linked venue
-  (`Address`) in place.
+- `/events/[id]/edit` — edit form, including the venue, which is sent inside the event payload.
 
 Create and edit are full routes, not a dialog over the list page: the list's
 "New Event" and per-row edit controls are links (`next/link`), not buttons
@@ -41,7 +40,7 @@ need a form.
 
 ## API module layering
 
-Modules: `events/`, `addresses/`, `geocoding/`.
+Modules: `events/`, `geocoding/`.
 
 Each feature under `apps/api/src/modules/<name>/` splits into four files, and the
 dependency direction only ever points down:
@@ -73,10 +72,14 @@ Request validation lives in `@repo/contracts`, not in either app. For events,
 the package exports two schemas derived from one field shape: a wire schema
 (ISO date strings) that the browser form validates against, and a payload
 schema (coerced `Date` objects) that the API parses request bodies with.
-Addresses have no date fields, so they export only a single pair —
-`createAddressInput` / `updateAddressInput` — with no separate wire/payload
-split; there is nothing for a payload variant to coerce. The API's
+The venue has no endpoint of its own: `createAddressInput` is used only as the nested `address` field of the event schemas. The API's
 `*.schema.ts` files are thin re-exports, so the module layering is unchanged.
+
+An event's venue (`Address`) is part of the event. It is created, updated and
+deleted only through the event endpoints — `address` omitted leaves it alone,
+`null` deletes it, an object creates or replaces it — and deleting an event
+deletes its venue. There is no `/api/addresses`. This keeps access control in
+one place: whoever may change the event may change its venue.
 
 The server remains authoritative. Client-side validation is a UX improvement,
 never the security boundary.
