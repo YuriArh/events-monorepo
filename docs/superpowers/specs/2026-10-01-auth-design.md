@@ -547,8 +547,6 @@ Each step leaves `pnpm check-types && pnpm lint && pnpm test` green.
   an event belongs to no one and can be claimed by anyone who learns its key.
 - **`trustProxy` must be configured** behind a reverse proxy, or every client
   shares one IP rate-limit bucket.
-- **The dev seed has no production guard.** It wipes users, events and
-  addresses; never run it against real data.
 
 ## Out of scope
 

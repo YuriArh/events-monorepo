@@ -213,7 +213,10 @@ Prisma blocks AI agents from running destructive migrate commands unless
 `packages/db/prisma/seed.ts` creates `admin@example.test` and
 `user@example.test` (password `password123`); the regular user owns the sample
 events. It wipes users, events and addresses first, so never run it against a
-database holding real data. It has no production guard.
+database holding real data. Before any query it refuses to run when
+`NODE_ENV=production`, or when the `DATABASE_URL` host is not `localhost`,
+`127.0.0.1`, `::1` or `postgres` (the compose service). `SEED_ALLOW_ANY_DB=1`
+lifts the host check only, for a deliberately disposable remote database.
 
 ## Image uploads
 

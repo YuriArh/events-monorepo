@@ -2,12 +2,46 @@ import argon2 from "argon2";
 
 import { prisma } from "../src/index.js";
 
+/** Local Postgres, plus `postgres`, the docker-compose service name. */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "postgres"]);
+
+/**
+ * The seed wipes users, events and addresses, so it refuses to touch anything
+ * that might hold real data: production, or a database that isn't local.
+ * SEED_ALLOW_ANY_DB=1 overrides the host check (not the production one).
+ * Runs before any query, so a refused run never connects.
+ */
+const assertSafeToSeed = () => {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Refusing to seed: NODE_ENV is production. The seed wipes users, events and addresses.");
+  }
+
+  if (process.env.SEED_ALLOW_ANY_DB === "1") return;
+
+  let host: string;
+  try {
+    // IPv6 hosts come back bracketed ("[::1]").
+    host = new URL(process.env.DATABASE_URL ?? "").hostname.replace(/^\[(.*)\]$/, "$1");
+  } catch {
+    throw new Error("Refusing to seed: DATABASE_URL is missing or not a valid URL.");
+  }
+
+  if (!LOCAL_HOSTS.has(host)) {
+    throw new Error(
+      `Refusing to seed: database host "${host}" is not local (${[...LOCAL_HOSTS].join(", ")}). ` +
+        "The seed wipes users, events and addresses. Set SEED_ALLOW_ANY_DB=1 to override.",
+    );
+  }
+};
+
 /**
  * Idempotent: clears the tables it owns, then recreates a known set. Keeping
  * dev data reproducible means `migrate reset` costs nothing, which is what
  * stops a reset from being a scary decision.
  */
 const seed = async () => {
+  assertSafeToSeed();
+
   await prisma.event.deleteMany();
   await prisma.address.deleteMany();
   await prisma.user.deleteMany(); // sessions and tokens cascade
