@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { authApi, meKey } from "@/lib/auth";
 import { issuesByField } from "@/lib/event-form";
+import { uncoveredMessage } from "@/lib/form-errors";
+
+const FIELDS = new Set(["name", "email", "password"]);
 
 export default function RegisterPage() {
     const router = useRouter();
@@ -34,7 +37,9 @@ export default function RegisterPage() {
                 name: value.name.trim() === "" ? undefined : value.name,
             });
             if (!parsed.success) {
-                setFieldErrors(issuesByField(parsed.error.issues));
+                const fields = issuesByField(parsed.error.issues);
+                setFieldErrors(fields);
+                setBanner(uncoveredMessage(fields, FIELDS));
                 return;
             }
 
@@ -46,9 +51,11 @@ export default function RegisterPage() {
                 if (error instanceof ApiError && error.status === 409) {
                     setFieldErrors({ email: error.message });
                 } else if (error instanceof ApiError && error.issues) {
-                    setFieldErrors(issuesByField(error.issues));
+                    const fields = issuesByField(error.issues);
+                    setFieldErrors(fields);
+                    setBanner(uncoveredMessage(fields, FIELDS));
                 } else {
-                    setBanner(error instanceof Error ? error.message : "Something went wrong");
+                    setBanner(error instanceof ApiError ? error.message : "Something went wrong");
                 }
             }
         },
@@ -64,6 +71,7 @@ export default function RegisterPage() {
                 </>
             }>
             <form
+                noValidate
                 {...stylex.props(authStyles.form)}
                 onSubmit={(event) => {
                     event.preventDefault();
