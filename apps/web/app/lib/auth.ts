@@ -80,9 +80,10 @@ export const safeNext = (next: string | null | undefined) => {
     // Resolve against a dummy origin the way the browser would; anything that
     // escapes it (//host, /\host, control-char tricks) is not a same-site path.
     const resolved = new URL(next, "http://same.invalid");
-    return resolved.origin === "http://same.invalid"
-        ? `${resolved.pathname}${resolved.search}${resolved.hash}`
-        : "/";
+    if (resolved.origin !== "http://same.invalid") return "/";
+    const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
+    // Dot segments ("/.//host") normalise to a protocol-relative path.
+    return path.startsWith("//") || path.startsWith("/\\") ? "/" : path;
 };
 
 /** Mirrors the API's `canModify`. Hides controls; the API is what enforces it. */

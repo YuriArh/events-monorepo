@@ -60,6 +60,10 @@ describe("safeNext", () => {
         ["/\n/evil.example", "/"],
         ["/\r/evil.example", "/"],
         [" //evil.example", "/"],
+        // Dot-segment normalisation can leave a protocol-relative path behind.
+        ["/.//evil.example", "/"],
+        ["/..//evil.example", "/"],
+        ["/a/..//evil.example", "/"],
     ])("%s → %s", (input, expected) => {
         expect(safeNext(input)).toBe(expected);
     });
