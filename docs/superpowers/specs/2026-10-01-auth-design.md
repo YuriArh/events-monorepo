@@ -328,13 +328,12 @@ instead:
   `address: createAddressInput.nullable().optional()`:
   - omitted → venue unchanged;
   - `null` → venue removed (the `Address` row is deleted);
-  - an object → venue created, or the existing one updated in place.
+  - an object → venue created, or the existing one replaced in place (omitted optional fields become null).
 - `event.service` writes the event and its address in one transaction, after
   `assertCanModify`. The `addresses` module is deleted: the event repository writes the venue with Prisma nested writes (`create` / `upsert` / `delete`), so nothing calls an address repository.
 - Deleting an event deletes its address in the same transaction, so addresses
-  no longer outlive their event (today they are orphaned — see the E2E
-  cleanup note in `docs/testing-conventions.md`, which this removes the need
-  for).
+  no longer outlive their event (before this change they were orphaned, and
+  the e2e suite had to clean them up by hand).
 - `POST`, `PATCH`, `DELETE /api/addresses` are removed. `GET /api/addresses`
   and `GET /api/addresses/:id` are removed too; the event response already
   embeds its address.

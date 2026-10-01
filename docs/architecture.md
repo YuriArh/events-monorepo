@@ -75,7 +75,7 @@ schema (coerced `Date` objects) that the API parses request bodies with.
 The venue has no endpoint of its own: `createAddressInput` is used only as the nested `address` field of the event schemas. The API's
 `*.schema.ts` files are thin re-exports, so the module layering is unchanged.
 
-An event's venue (`Address`) is part of the event. It is created, updated and
+An event's venue (`Address`) is part of the event. It is created, replaced and
 deleted only through the event endpoints — `address` omitted leaves it alone,
 `null` deletes it, an object creates or replaces it — and deleting an event
 deletes its venue. There is no `/api/addresses`. This keeps access control in
