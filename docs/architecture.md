@@ -30,6 +30,9 @@ The web app talks to the API over HTTP; it does not import `@repo/db`. Only
 ## Web app routes
 
 - `/` — the event list.
+- `/events/[id]` — event detail. A Server Component (rendered per request,
+  `notFound()` → HTTP 404); only the dates (`LocalDateTime`, viewer's time
+  zone) and the owner's Edit/Delete (`EventOwnerActions`) are client islands.
 - `/events/new` — create form.
 - `/events/[id]/edit` — edit form, including the venue, which is sent inside the event payload.
 

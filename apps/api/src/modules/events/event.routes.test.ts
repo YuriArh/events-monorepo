@@ -700,3 +700,32 @@ describe("ownership", () => {
         expect((await patch(created.id)).statusCode).toBe(401);
     });
 });
+
+describe("organizer in responses", () => {
+    it("includes the organizer's id and name but never the email", async () => {
+        const ada = await signUp(app, { name: "Ada Organizer" });
+        const created = await app.inject({
+            method: "POST",
+            url: "/api/events",
+            headers: { "content-type": "application/json", cookie: ada.cookie },
+            payload: { name: "Ada's event" },
+        });
+
+        const detail = await app.inject({ method: "GET", url: `/api/events/${created.json().id}` });
+        const list = await app.inject({ method: "GET", url: "/api/events" });
+
+        expect(detail.json().organizer).toEqual({ id: ada.user.id, name: "Ada Organizer" });
+        expect(list.json()[0].organizer).toEqual({ id: ada.user.id, name: "Ada Organizer" });
+        expect(detail.body).not.toContain(ada.email);
+        expect(list.body).not.toContain(ada.email);
+    });
+
+    it("is null for an event without an organizer", async () => {
+        const created = await createEvent();
+        await prisma.event.update({ where: { id: created.id }, data: { organizerId: null } });
+
+        const detail = await app.inject({ method: "GET", url: `/api/events/${created.id}` });
+
+        expect(detail.json().organizer).toBeNull();
+    });
+});

@@ -4,16 +4,14 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2Icon } from "lucide-react";
 
 import { EventForm } from "@/components/event-form";
+import { Spinner } from "@/components/spinner";
 import { Card, CardContent } from "@/components/ui/card";
 import { canModifyEvent, useRequireUser } from "@/lib/auth";
 import { resolveImageKey, toEventInput, toFormValues, type EventFormValues } from "@/lib/event-form";
 import { eventKeys, eventsApi, uploadImage } from "@/lib/events";
 import { colors, typography } from "@/styles/tokens.stylex";
-
-const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } });
 
 const styles = stylex.create({
     page: {
@@ -35,12 +33,6 @@ const styles = stylex.create({
         gap: "0.5rem",
         paddingBlock: "5rem",
         color: colors.mutedForeground,
-    },
-    spinner: {
-        animationName: spin,
-        animationDuration: "1s",
-        animationIterationCount: "infinite",
-        animationTimingFunction: "linear",
     },
 });
 
@@ -82,7 +74,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     <CardContent>
                         {!ready || isPending ? (
                             <div {...stylex.props(styles.state, typography.sm)}>
-                                <Loader2Icon {...stylex.props(styles.spinner)} size={16} />
+                                <Spinner size={16} />
                                 Loading…
                             </div>
                         ) : error || !event ? (

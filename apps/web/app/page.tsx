@@ -3,30 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarIcon, Loader2Icon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { DeleteEventDialog } from "@/components/delete-event-dialog";
+import { Spinner } from "@/components/spinner";
 import { Button, buttonStyleProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 import { canModifyEvent, useMe } from "@/lib/auth";
 import { type EventRecord, eventKeys, eventsApi } from "@/lib/events";
-
-const spin = stylex.keyframes({
-    from: { transform: "rotate(0deg)" },
-    to: { transform: "rotate(360deg)" },
-});
 
 const styles = stylex.create({
     page: {
@@ -162,18 +149,9 @@ const styles = stylex.create({
             ":hover": colors.destructive,
         },
     },
-    destructiveAction: {
-        backgroundColor: {
-            default: colors.destructive,
-            ":hover": `color-mix(in oklab, ${colors.destructive} 90%, transparent)`,
-        },
-        color: "#fff",
-    },
-    spinner: {
-        animationName: spin,
-        animationDuration: "1s",
-        animationIterationCount: "infinite",
-        animationTimingFunction: "linear",
+    nameLink: {
+        color: "inherit",
+        textDecoration: { default: "none", ":hover": "underline" },
     },
 });
 
@@ -183,7 +161,6 @@ const formatDate = (value: string) =>
 const messageOf = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
 
 export default function HomePage() {
-    const queryClient = useQueryClient();
     const { data: me } = useMe();
 
     const [deletingEvent, setDeletingEvent] = useState<EventRecord | null>(null);
@@ -197,27 +174,7 @@ export default function HomePage() {
         queryFn: eventsApi.list,
     });
 
-    const invalidateEvents = () => queryClient.invalidateQueries({ queryKey: eventKeys.all });
-
-    const deleteMutation = useMutation({
-        mutationFn: (id: string) => eventsApi.remove(id),
-        onSuccess: async () => {
-            await invalidateEvents();
-            setDeletingEvent(null);
-        },
-    });
-
-    const handleDelete = () => {
-        if (deletingEvent) {
-            deleteMutation.mutate(deletingEvent.id);
-        }
-    };
-
-    const pageError = listError
-        ? messageOf(listError, "Failed to load events")
-        : deleteMutation.error
-          ? messageOf(deleteMutation.error, "Failed to delete event")
-          : null;
+    const pageError = listError ? messageOf(listError, "Failed to load events") : null;
 
     return (
         <div {...stylex.props(styles.page)}>
@@ -246,7 +203,7 @@ export default function HomePage() {
                     <CardContent style={styles.cardContent}>
                         {isPending ? (
                             <div {...stylex.props(styles.stateBox, typography.sm)}>
-                                <Loader2Icon {...stylex.props(styles.spinner)} size={16} />
+                                <Spinner size={16} />
                                 Loading events…
                             </div>
                         ) : events.length === 0 ? (
@@ -284,7 +241,11 @@ export default function HomePage() {
                                                     <span {...stylex.props(styles.iconChip)}>
                                                         <CalendarIcon size={15} />
                                                     </span>
-                                                    <span {...stylex.props(styles.nameText)}>{event.name}</span>
+                                                    <Link
+                                                        href={`/events/${event.id}`}
+                                                        {...stylex.props(styles.nameText, styles.nameLink)}>
+                                                        {event.name}
+                                                    </Link>
                                                 </div>
                                             </TableCell>
                                             <TableCell style={[styles.cell, styles.mutedCell, typography.sm]}>
@@ -321,25 +282,7 @@ export default function HomePage() {
                 </Card>
             </main>
 
-            <AlertDialog open={deletingEvent !== null} onOpenChange={(open) => !open && setDeletingEvent(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete "{deletingEvent?.name}"?</AlertDialogTitle>
-                        <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            variant="destructive"
-                            style={styles.destructiveAction}
-                            disabled={deleteMutation.isPending}
-                            onClick={handleDelete}>
-                            {deleteMutation.isPending && <Loader2Icon {...stylex.props(styles.spinner)} />}
-                            Delete
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <DeleteEventDialog event={deletingEvent} onClose={() => setDeletingEvent(null)} />
         </div>
     );
 }

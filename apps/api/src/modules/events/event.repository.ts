@@ -2,7 +2,14 @@ import { Prisma, prisma } from "@repo/db";
 
 import type { CreateAddressInput, CreateEventInput, UpdateEventInput } from "./event.types.js";
 
-const withAddress = { address: true } as const;
+/**
+ * What every event response carries: the venue, and the organizer's public
+ * fields only — never their email.
+ */
+const withRelations = {
+  address: true,
+  organizer: { select: { id: true, name: true } },
+} as const;
 
 /**
  * Prisma cannot tell "SQL NULL" from "the JSON value null" on a nullable Json
@@ -41,11 +48,11 @@ const venueWrite = (address: CreateAddressInput | null | undefined, hasVenue: bo
 
 export const eventRepository = {
   findMany() {
-    return prisma.event.findMany({ orderBy: { startsAt: "asc" }, include: withAddress });
+    return prisma.event.findMany({ orderBy: { startsAt: "asc" }, include: withRelations });
   },
 
   findById(id: string) {
-    return prisma.event.findUnique({ where: { id }, include: withAddress });
+    return prisma.event.findUnique({ where: { id }, include: withRelations });
   },
 
   findByImageKey(imageKey: string) {
@@ -60,7 +67,7 @@ export const eventRepository = {
         organizer: { connect: { id: organizerId } },
         address: address ? { create: toAddressData(address) } : undefined,
       },
-      include: withAddress,
+      include: withRelations,
     });
   },
 
@@ -68,7 +75,7 @@ export const eventRepository = {
     return prisma.event.update({
       where: { id },
       data: { ...data, address: venueWrite(address, hasVenue) },
-      include: withAddress,
+      include: withRelations,
     });
   },
 

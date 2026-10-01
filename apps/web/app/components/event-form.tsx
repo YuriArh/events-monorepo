@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import * as stylex from "@stylexjs/stylex";
 import { useForm } from "@tanstack/react-form";
-import { Loader2Icon } from "lucide-react";
 import { createEventInput } from "@repo/contracts";
 
 import { AddressSearch } from "@/components/address-search";
 import { DateTimePicker } from "@/components/date-time-picker";
+import { Spinner } from "@/components/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { formLevelError, issuesByField, toEventInput, type EventFormValues } from "@/lib/event-form";
 import { ApiError, imageUrl } from "@/lib/events";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
-
-const spin = stylex.keyframes({ from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } });
 
 /** Field names this form renders an inline error under — kept in one place so
  * the banner logic below can tell an issue with inline coverage from one that
@@ -75,12 +73,6 @@ const styles = stylex.create({
     actions: { display: "flex", justifyContent: "flex-end", gap: "0.5rem" },
     preview: { width: "8rem", height: "8rem", objectFit: "cover", borderRadius: radius.md },
     imageRow: { display: "flex", alignItems: "center", gap: "1rem" },
-    spinner: {
-        animationName: spin,
-        animationDuration: "1s",
-        animationIterationCount: "infinite",
-        animationTimingFunction: "linear",
-    },
     hint: { color: colors.mutedForeground },
 });
 
@@ -323,7 +315,7 @@ export function EventForm({ initialValues, submitLabel, onSubmit, onCancel }: Ev
                             Cancel
                         </Button>
                         <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                            {isSubmitting && <Loader2Icon {...stylex.props(styles.spinner)} />}
+                            {isSubmitting && <Spinner />}
                             {submitLabel}
                         </Button>
                     </div>

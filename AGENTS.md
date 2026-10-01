@@ -10,6 +10,18 @@ pnpm check-types && pnpm lint && pnpm test
 pnpm test:e2e          # Playwright, boots both apps
 ```
 
+# Principles
+
+- **KISS** — pick the simplest design that meets the requirement. No speculative
+  options, layers or abstractions "for later".
+- **DRY** — one source of truth for each rule, shape and piece of UI. Reuse what
+  exists (`@repo/contracts`, `lib/*` helpers, shared components) before adding a
+  near-copy; extract once a second real use appears.
+- **Server rendering first** — in `apps/web`, pages and components are Server
+  Components by default. Fetch data on the server and render HTML there. Add
+  `"use client"` only to the smallest island that genuinely needs the browser
+  (state, effects, event handlers, the viewer's session or time zone).
+
 Before writing code, read the conventions that apply:
 
 - [docs/architecture.md](docs/architecture.md) — layout, layering, data flow
