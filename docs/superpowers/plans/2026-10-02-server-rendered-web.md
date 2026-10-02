@@ -28,7 +28,7 @@
 
 | File | Change |
 | --- | --- |
-| `apps/api/src/app.ts` (+ tests) | drop CORS registration; `trustProxy` loopback |
+| `apps/api/src/app.ts`, `lib/config.ts` (+ tests) | drop CORS registration; `trustProxy` from `TRUSTED_PROXY` |
 | `apps/web/next.config.mjs` | `rewrites` for `/api` and `/uploads` |
 | `apps/web/app/lib/api.ts` | `apiBaseUrl`, `apiFetch`, `readResponse`, `request`, `Fetcher` |
 | `apps/web/app/lib/set-cookie.ts` (+test) | pure `parseSessionSetCookie` |
