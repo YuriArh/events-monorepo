@@ -15,7 +15,9 @@ This is the default for all event and user data.
 
 | Question | Decision |
 | --- | --- |
-| How the server knows the user | Next **proxies** `/api/*` and `/uploads/*` to Fastify. The browser only talks to the web origin, so the `sid` cookie belongs to it; the server reads it with `cookies()` and forwards it to the API. |
+| How the server knows the user | The API is **same-origin for the browser**: `/api/*` and `/uploads/*` on the web host reach Fastify, so the `sid` cookie belongs to the web host; the server reads it with `cookies()` and forwards it to the API. The web code doesn't care who proxies. |
+| Who proxies | **Development:** Next `rewrites` (on unless `API_PROXY=off`). **Production:** nginx in front of both apps routes `/api` and `/uploads` straight to Fastify and everything else to Next; Next's rewrites are switched off. |
+| Client IP behind the proxy | API `trustProxy` from `TRUSTED_PROXY` (default loopback; in production the nginx address/subnet). |
 | Reading events and the user | **Server prefetch into TanStack Query + `HydrationBoundary`** — the default. Client components read with `useQuery` and the same query options. |
 | Simple forms (sign-in, register, forgot/reset password, verify email, account, sign-out) | **Server Actions** with `useActionState`; work without JavaScript. |
 | Complex interactive forms (create/edit event, and future ones like it) | **TanStack Form + TanStack Query mutations** against `/api` through the proxy, then `invalidateQueries`. |
@@ -35,16 +37,30 @@ Server Components and Server Actions can read it. Works with any deployment.
 ## Architecture
 
 ```
-browser ──/api/*, /uploads/*──▶ Next rewrites ──▶ Fastify      (client queries, mutations, uploads)
+browser ──/api/*, /uploads/*──▶ proxy (dev: Next rewrites · prod: nginx) ──▶ Fastify   (client queries, mutations, uploads)
 browser ──page request───────▶ Next server ──apiFetch + cookie──▶ Fastify   (prefetch, Server Actions)
                                       └── dehydrate ──▶ HydrationBoundary ──▶ client QueryClient
 ```
 
-### Proxy — `apps/web/next.config.mjs`
+### Proxy
 
-`rewrites()` maps `/api/:path*` and `/uploads/:path*` to
-`${API_INTERNAL_URL}/...` (`API_INTERNAL_URL` defaults to
-`http://localhost:4000`). `NEXT_PUBLIC_API_URL` is removed.
+The web code only assumes "the API answers on this origin under `/api` and
+`/uploads`". Two interchangeable ways to provide that:
+
+- **Development — Next `rewrites`** (`apps/web/next.config.mjs`): map
+  `/api/:path*` and `/uploads/:path*` to `${API_INTERNAL_URL}/...`
+  (`API_INTERNAL_URL` defaults to `http://localhost:4000`). On by default;
+  `API_PROXY=off` disables them.
+- **Production — nginx** in front of both apps (documented in
+  `docs/architecture.md` → "Deploying"): `location /api/` and `/uploads/` →
+  Fastify, `location /` → Next, `proxy_set_header X-Forwarded-For`,
+  `client_max_body_size 5m`. API traffic then bypasses the Next process
+  entirely (no extra hop, no Next load, Next isn't a single point of failure
+  for `/api`), and Fastify needn't be public. Run Next with `API_PROXY=off`.
+
+Server-side calls (`serverFetch`) always go straight to `API_INTERNAL_URL`.
+`NEXT_PUBLIC_API_URL` is removed. A ready-made nginx/compose deployment is out
+of scope (the project has no deployment yet) — only the documented config.
 
 ### HTTP clients — one core, two contexts
 
@@ -160,10 +176,12 @@ API's own Origin check still guards `/api` writes through the proxy.
 ## API changes
 
 - Remove `@fastify/cors` registration (and its tests); keep the Origin check.
-- `trustProxy` for loopback only (`["127.0.0.1", "::1"]`), so the client IP the
-  proxy/`serverFetch` forwards in `X-Forwarded-For` is what rate limits key on.
-  Without it every request would come from the Next server's IP and per-IP
-  limits would become global.
+- `trustProxy` from `TRUSTED_PROXY` (comma-separated addresses/CIDRs; default
+  `127.0.0.1,::1`), so the client IP the proxy (Next or nginx) and
+  `serverFetch` forward in `X-Forwarded-For` is what rate limits key on.
+  Trusting nobody would make every visitor share the proxy's IP (per-IP
+  limits become global); trusting everybody would let anyone spoof
+  `X-Forwarded-For` and dodge limits. In production set it to nginx's address.
 
 ## What is removed
 

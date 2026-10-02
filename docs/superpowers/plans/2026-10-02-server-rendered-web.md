@@ -4,7 +4,7 @@
 
 **Goal:** Every page in `apps/web` is a Server Component whose HTML contains its data; events and the current user are prefetched on the server into the TanStack Query cache and read on the client with `useQuery`; simple forms use Server Actions, the event form keeps TanStack Form + mutations through an `/api` proxy.
 
-**Architecture:** Next `rewrites` proxy `/api/*` and `/uploads/*` to Fastify, so the `sid` cookie belongs to the web origin. An isomorphic `apiFetch`/`request` core is used by the browser (relative URLs) and by `serverFetch`/`serverRequest` on the server (absolute URL + forwarded cookie and IP). Shared query options in `lib/queries.ts` drive both server prefetch (`HydrationBoundary`) and client `useQuery`. Server Actions relay the API's `Set-Cookie` with `cookies().set/delete`.
+**Architecture:** The API is same-origin for the browser (`/api/*`, `/uploads/*`), so the `sid` cookie belongs to the web origin. In development Next `rewrites` provide that (switchable with `API_PROXY=off`); in production nginx does, routing API traffic straight to Fastify — the web code doesn't depend on which. An isomorphic `apiFetch`/`request` core is used by the browser (relative URLs) and by `serverFetch`/`serverRequest` on the server (absolute URL + forwarded cookie and IP). Shared query options in `lib/queries.ts` drive both server prefetch (`HydrationBoundary`) and client `useQuery`. Server Actions relay the API's `Set-Cookie` with `cookies().set/delete`.
 
 **Tech Stack:** Next.js 16 App Router, React 19 (`useActionState`), TanStack Query 5.103 (`HydrationBoundary`, `isServer`, `queryOptions`), TanStack Form, Fastify 5, Zod 4, Vitest, Playwright.
 
@@ -57,7 +57,7 @@
 
 ### Task 1: API — no CORS, trust the local proxy
 
-**Files:** Modify `apps/api/src/app.ts`; tests in `apps/api/src/modules/events/event.routes.test.ts` (CORS block) and `apps/api/src/app.security.test.ts`.
+**Files:** Modify `apps/api/src/app.ts`, `apps/api/src/lib/config.ts`; tests in `apps/api/src/modules/events/event.routes.test.ts` (CORS block) and `apps/api/src/app.security.test.ts`.
 
 - [ ] **Step 1: Failing test** — append to `app.security.test.ts` (suite already builds with `rateLimits: true`):
 
@@ -87,7 +87,22 @@ describe("behind the web proxy", () => {
 
 Run `pnpm --filter api exec vitest run src/app.security.test.ts` → FAIL (both IPs share 127.0.0.1's bucket: the last call is 429).
 
-- [ ] **Step 2: Implement** — in `buildApp`: `Fastify({ logger: …, trustProxy: ["127.0.0.1", "::1"] })` with a comment (only the local web proxy is trusted). Remove the `@fastify/cors` import and `app.register(cors, …)`. Delete the `describe("CORS", …)` block in `event.routes.test.ts`. Leave the `@fastify/cors` dependency in `package.json` (removing it would rewrite the lockfile, which this environment's pnpm can't read cleanly) — note it in the commit message as a follow-up.
+- [ ] **Step 2: Implement** — in `apps/api/src/lib/config.ts` add:
+
+```ts
+/**
+ * Proxies whose X-Forwarded-For we believe (comma-separated addresses/CIDRs):
+ * the dev Next proxy on loopback by default; nginx's address in production.
+ * Trusting nobody makes every visitor share the proxy's IP; trusting everybody
+ * lets anyone spoof the header and dodge rate limits.
+ */
+export const TRUSTED_PROXY = (process.env.TRUSTED_PROXY ?? "127.0.0.1,::1")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+```
+
+and in `buildApp`: `Fastify({ logger: …, trustProxy: TRUSTED_PROXY })`. Add a second test case: with `TRUSTED_PROXY` unchanged, a request whose `remoteAddress` is NOT loopback (e.g. `"203.0.113.50"`) and a spoofed `x-forwarded-for` is keyed by its real address (5 attempts with varying spoofed headers → the 6th is 429). Remove the `@fastify/cors` import and `app.register(cors, …)`. Delete the `describe("CORS", …)` block in `event.routes.test.ts`. Leave the `@fastify/cors` dependency in `package.json` (removing it would rewrite the lockfile, which this environment's pnpm can't read cleanly) — note it in the commit message as a follow-up.
 
 - [ ] **Step 3: Verify** `pnpm --filter api check-types && pnpm --filter api lint && pnpm --filter api test` → PASS.
 
@@ -199,15 +214,23 @@ Run `pnpm --filter web test` → FAIL (modules missing).
 /** Where the Next server reaches Fastify. The browser never does — it goes through the rewrites below. */
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
+/**
+ * Development proxy. In production nginx routes /api and /uploads straight to
+ * Fastify (docs/architecture.md → Deploying) and Next runs with API_PROXY=off.
+ */
+const proxyEnabled = process.env.API_PROXY !== "off";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     // Same-origin API for the browser: the session cookie belongs to the web
     // host, so Server Components and Server Actions can read it.
     async rewrites() {
-        return [
-            { source: "/api/:path*", destination: `${API_INTERNAL_URL}/api/:path*` },
-            { source: "/uploads/:path*", destination: `${API_INTERNAL_URL}/uploads/:path*` },
-        ];
+        return proxyEnabled
+            ? [
+                  { source: "/api/:path*", destination: `${API_INTERNAL_URL}/api/:path*` },
+                  { source: "/uploads/:path*", destination: `${API_INTERNAL_URL}/uploads/:path*` },
+              ]
+            : [];
     },
 };
 
@@ -943,8 +966,36 @@ test.describe("without JavaScript", () => {
   - Data flow: replace the diagram with the proxy/server-fetch/hydration picture from the spec.
   - "Web app routes": every page is a Server Component; list which client component each renders.
   - New section "Data on the web" — the default (server prefetch into TanStack Query via `lib/queries.ts`, `HydrationBoundary`, `getServerQueryClient`, `getMe`), and the mutation rule (Server Actions for simple forms, TanStack mutations for complex ones), cookies only in Server Actions, the renewal limitation.
-  - Environment: remove `NEXT_PUBLIC_API_URL`; add `API_INTERNAL_URL` (web, server + rewrites) and `SITE_URL` (web, `metadataBase`).
-  - CORS section: replace with "The browser reaches the API only through the Next proxy; the API trusts `X-Forwarded-For` from loopback only."
+  - Environment: remove `NEXT_PUBLIC_API_URL`; add `API_INTERNAL_URL` (web, server + dev rewrites), `API_PROXY` (web, `off` behind nginx), `SITE_URL` (web, `metadataBase`), `TRUSTED_PROXY` (api, default loopback, nginx's address in production).
+  - CORS section: replace with "The browser reaches the API only on the web origin (dev: Next rewrites; prod: nginx); the API trusts `X-Forwarded-For` only from `TRUSTED_PROXY`."
+  - New section "Deploying": production layout — nginx in front, `/api/` and `/uploads/` → Fastify, `/` → Next (`API_PROXY=off`), Fastify not public, `TRUSTED_PROXY` = nginx's address, `WEB_ORIGIN` = the public origin. Include this example:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name app.example.com;
+
+    client_max_body_size 5m; # image uploads
+
+    location /api/ {
+        proxy_pass http://api:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /uploads/ {
+        proxy_pass http://api:4000;
+    }
+
+    location / {
+        proxy_pass http://web:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
   `docs/testing-conventions.md`: Server Actions are unit-tested with `vi.mock("@/lib/api.server")` and `next/navigation`; e2e can assert server HTML with `request.get(baseURL…)`.
 
 - [ ] **Step 4: Verify** — full `pnpm check-types && pnpm lint && pnpm test`, `pnpm --filter web build`, `pnpm test:e2e` twice; leftover check (no `e2e-%` users or `E2E%` events in the dev DB; nothing listening on 3000/4000).
