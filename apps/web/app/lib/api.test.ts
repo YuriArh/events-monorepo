@@ -28,4 +28,25 @@ describe("request", () => {
 
         expect(fetchMock.mock.calls[0]?.[0]).toBe("http://api.test/api/anything");
     });
+
+    it("keeps headers the caller passes as a Headers instance", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await request("/api/anything", { method: "POST", body: "{}", headers: new Headers({ "x-custom": "1" }) });
+
+        const sent = new Headers((fetchMock.mock.calls[0] as [string, RequestInit])[1].headers);
+        expect(sent.get("x-custom")).toBe("1");
+        expect(sent.get("content-type")).toBe("application/json");
+    });
+
+    it("lets the caller's content-type win", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await request("/api/anything", { method: "POST", body: "x", headers: { "Content-Type": "text/plain" } });
+
+        const sent = new Headers((fetchMock.mock.calls[0] as [string, RequestInit])[1].headers);
+        expect(sent.get("content-type")).toBe("text/plain");
+    });
 });

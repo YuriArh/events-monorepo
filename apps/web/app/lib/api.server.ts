@@ -13,14 +13,12 @@ export async function serverFetch(path: string, init?: RequestInit) {
     const sid = cookieStore.get(SESSION_COOKIE)?.value;
     const forwardedFor = headerStore.get("x-forwarded-for");
 
-    return apiFetch(path, {
-        ...init,
-        headers: {
-            ...(sid ? { cookie: `${SESSION_COOKIE}=${sid}` } : {}),
-            ...(forwardedFor ? { "x-forwarded-for": forwardedFor } : {}),
-            ...init?.headers,
-        },
-    });
+    // Any HeadersInit shape; the caller's values win.
+    const forwarded = new Headers(init?.headers);
+    if (sid && !forwarded.has("cookie")) forwarded.set("cookie", `${SESSION_COOKIE}=${sid}`);
+    if (forwardedFor && !forwarded.has("x-forwarded-for")) forwarded.set("x-forwarded-for", forwardedFor);
+
+    return apiFetch(path, { ...init, headers: forwarded });
 }
 
 export const serverRequest: Fetcher = async (path, init) => readResponse(await serverFetch(path, init));

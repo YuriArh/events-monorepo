@@ -9,7 +9,7 @@ const fetchMock = vi.fn();
 
 const lastCall = () => {
     const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
-    return { url, init, headers: (init.headers ?? {}) as Record<string, string> };
+    return { url, init, headers: new Headers(init.headers) };
 };
 
 beforeEach(() => {
@@ -41,7 +41,7 @@ describe("eventsApi.create", () => {
         expect(url).toBe("http://api.test/api/events");
         expect(init.method).toBe("POST");
         expect(init.body).toBe(JSON.stringify({ name: "Retro" }));
-        expect(headers["Content-Type"]).toBe("application/json");
+        expect(headers.get("Content-Type")).toBe("application/json");
     });
 });
 
@@ -56,7 +56,7 @@ describe("eventsApi.remove", () => {
         const { url, init, headers } = lastCall();
         expect(url).toBe("http://api.test/api/events/abc");
         expect(init.method).toBe("DELETE");
-        expect(headers["Content-Type"]).toBeUndefined();
+        expect(headers.has("Content-Type")).toBe(false);
     });
 
     it("resolves without parsing a body on 204", async () => {
@@ -130,6 +130,6 @@ describe("uploadImage", () => {
         expect(init.method).toBe("POST");
         expect(init.body).toBeInstanceOf(FormData);
         // The browser sets the multipart boundary itself; forcing a content-type breaks it.
-        expect(headers["Content-Type"]).toBeUndefined();
+        expect(headers.has("Content-Type")).toBe(false);
     });
 });

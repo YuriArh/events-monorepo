@@ -27,17 +27,17 @@ export type Fetcher = <T>(path: string, init?: RequestInit) => Promise<T>;
 export const apiBaseUrl = () =>
     typeof window === "undefined" ? (process.env.API_INTERNAL_URL ?? "http://localhost:4000") : "";
 
-export const apiFetch = (path: string, init?: RequestInit) =>
-    fetch(`${apiBaseUrl()}${path}`, {
-        cache: "no-store",
-        ...init,
-        headers: {
-            // Only on requests that actually carry a JSON body: an empty body makes
-            // Fastify reject the request, and FormData needs its own boundary.
-            ...(init?.body && typeof init.body === "string" ? { "Content-Type": "application/json" } : {}),
-            ...init?.headers,
-        },
-    });
+export const apiFetch = (path: string, init?: RequestInit) => {
+    // Any HeadersInit shape (object, array, Headers); the caller's values win.
+    const headers = new Headers(init?.headers);
+    // Only on requests that actually carry a JSON body: an empty body makes
+    // Fastify reject the request, and FormData needs its own boundary.
+    if (init?.body && typeof init.body === "string" && !headers.has("content-type")) {
+        headers.set("content-type", "application/json");
+    }
+
+    return fetch(`${apiBaseUrl()}${path}`, { cache: "no-store", ...init, headers });
+};
 
 export async function readResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
