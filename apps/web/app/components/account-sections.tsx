@@ -11,6 +11,7 @@ import { TextField } from "@/components/text-field";
 import { Button } from "@/components/ui/button";
 import { NO_FIELDS, bannerFor } from "@/lib/form-errors";
 import { meQuery } from "@/lib/queries";
+import { useFocusFirstInvalid } from "@/lib/use-focus-first-invalid";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 /*
@@ -39,10 +40,11 @@ const PROFILE_FIELDS = new Set(["name"]);
 
 function ProfileSection({ name, email }: { name: string | null; email: string }) {
     const [state, formAction, pending] = useActionState(updateProfile, {});
+    const formRef = useFocusFirstInvalid(state);
 
     return (
         <Section title="Profile">
-            <form action={formAction} {...stylex.props(authStyles.form)}>
+            <form ref={formRef} action={formAction} {...stylex.props(authStyles.form)}>
                 <FormBanner message={bannerFor(state, PROFILE_FIELDS)} />
                 <p {...stylex.props(styles.muted, typography.sm)}>{email}</p>
                 <TextField
@@ -88,10 +90,11 @@ const PASSWORD_FIELDS = new Set(["currentPassword", "newPassword"]);
 
 function PasswordSection() {
     const [state, formAction, pending] = useActionState(changePassword, {});
+    const formRef = useFocusFirstInvalid(state);
 
     return (
         <Section title="Password">
-            <form action={formAction} {...stylex.props(authStyles.form)}>
+            <form ref={formRef} action={formAction} {...stylex.props(authStyles.form)}>
                 <FormBanner message={bannerFor(state, PASSWORD_FIELDS)} />
                 <FormSuccess message={state.message} />
                 <TextField
@@ -146,10 +149,11 @@ const DELETE_FIELDS = new Set(["password"]);
 
 function DeleteSection() {
     const [state, formAction, pending] = useActionState(deleteAccount, {});
+    const formRef = useFocusFirstInvalid(state);
 
     return (
         <Section title="Delete account">
-            <form action={formAction} {...stylex.props(authStyles.form)}>
+            <form ref={formRef} action={formAction} {...stylex.props(authStyles.form)}>
                 <p {...stylex.props(styles.muted, typography.sm)}>
                     Your events stay listed without an organizer. This cannot be undone.
                 </p>

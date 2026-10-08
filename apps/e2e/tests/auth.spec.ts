@@ -86,6 +86,16 @@ test("register, own an event, sign out, sign back in", async ({ page, playwright
             await expect(page.getByRole("link", { name: `Edit ${eventName}` })).toBeHidden();
         });
 
+        await test.step("a taken email is refused, with focus moved to it", async () => {
+            await page.goto("/register");
+            await page.getByLabel("Email").fill(email);
+            await page.getByLabel("Password").fill(E2E_PASSWORD);
+            await page.getByRole("button", { name: "Create account" }).click();
+
+            await expect(page.getByText("Email already registered")).toBeVisible();
+            await expect(page.getByLabel("Email")).toBeFocused();
+        });
+
         await test.step("a wrong password is refused", async () => {
             await page.getByRole("link", { name: "Sign in" }).click();
             await page.getByLabel("Email").fill(email);

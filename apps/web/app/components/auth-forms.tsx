@@ -9,6 +9,7 @@ import { FormBanner, FormSuccess, authStyles } from "@/components/auth-page";
 import { TextField } from "@/components/text-field";
 import { Button } from "@/components/ui/button";
 import { NO_FIELDS, bannerFor } from "@/lib/form-errors";
+import { useFocusFirstInvalid } from "@/lib/use-focus-first-invalid";
 
 /*
  * The auth forms post to Server Actions, so they work before (or without)
@@ -21,9 +22,10 @@ const LOGIN_FIELDS = new Set(["email", "password"]);
 
 export function LoginForm({ next }: { next: string }) {
     const [state, formAction, pending] = useActionState(login, {});
+    const formRef = useFocusFirstInvalid(state);
 
     return (
-        <form action={formAction} {...stylex.props(authStyles.form)}>
+        <form ref={formRef} action={formAction} {...stylex.props(authStyles.form)}>
             <input type="hidden" name="next" value={next} />
             <FormBanner message={bannerFor(state, LOGIN_FIELDS)} />
             <TextField
@@ -58,9 +60,10 @@ const REGISTER_FIELDS = new Set(["name", "email", "password"]);
 
 export function RegisterForm() {
     const [state, formAction, pending] = useActionState(register, {});
+    const formRef = useFocusFirstInvalid(state);
 
     return (
-        <form action={formAction} {...stylex.props(authStyles.form)}>
+        <form ref={formRef} action={formAction} {...stylex.props(authStyles.form)}>
             <FormBanner message={bannerFor(state, REGISTER_FIELDS)} />
             <TextField
                 id="name"
@@ -105,11 +108,12 @@ const FORGOT_FIELDS = new Set(["email"]);
 
 export function ForgotPasswordForm() {
     const [state, formAction, pending] = useActionState(forgotPassword, {});
+    const formRef = useFocusFirstInvalid(state);
 
     if (state.message) return <FormSuccess message={state.message} />;
 
     return (
-        <form action={formAction} {...stylex.props(authStyles.form)}>
+        <form ref={formRef} action={formAction} {...stylex.props(authStyles.form)}>
             <FormBanner message={bannerFor(state, FORGOT_FIELDS)} />
             <TextField
                 id="email"
@@ -134,6 +138,7 @@ const RESET_FIELDS = new Set(["newPassword"]);
 
 export function ResetPasswordForm({ token }: { token: string }) {
     const [state, formAction, pending] = useActionState(resetPassword, {});
+    const formRef = useFocusFirstInvalid(state);
 
     if (state.message) {
         return (
@@ -147,7 +152,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
     if (!token) return <FormBanner message="This link is missing its token. Request a new one." />;
 
     return (
-        <form action={formAction} {...stylex.props(authStyles.form)}>
+        <form ref={formRef} action={formAction} {...stylex.props(authStyles.form)}>
             <input type="hidden" name="token" value={token} />
             <FormBanner message={bannerFor(state, RESET_FIELDS)} />
             <TextField
