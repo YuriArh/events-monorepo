@@ -22,6 +22,12 @@ export const formatEventWhen = (startsAt: string, endsAt: string | null, timeZon
         : `${startText} – ${day.format(end)} · ${time.format(end)}`;
 };
 
+/** "Oct 1, 2026". `timeZone` defaults to the runtime's (the viewer's, in the browser). */
+export const formatDate = (value: string, timeZone?: string) =>
+    new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone }).format(
+        new Date(value),
+    );
+
 export const formatAddressLines = (
     address: Pick<Address, "label" | "line1" | "line2" | "city" | "region" | "postalCode" | "country">,
 ) =>

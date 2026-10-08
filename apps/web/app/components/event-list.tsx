@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import { DeleteEventDialog } from "@/components/delete-event-dialog";
+import { LocalDate } from "@/components/local-date-time";
 import { Spinner } from "@/components/spinner";
 import { Button, buttonStyleProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -156,9 +157,6 @@ const styles = stylex.create({
     },
 });
 
-const formatDate = (value: string) =>
-    new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
 const messageOf = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
 
 export function EventList() {
@@ -247,7 +245,7 @@ export function EventList() {
                                                 </div>
                                             </TableCell>
                                             <TableCell style={[styles.cell, styles.mutedCell, typography.sm]}>
-                                                {formatDate(event.createdAt)}
+                                                <LocalDate value={event.createdAt} />
                                             </TableCell>
                                             <TableCell style={styles.cell}>
                                                 <div {...stylex.props(styles.actions)}>

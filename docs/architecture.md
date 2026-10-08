@@ -42,7 +42,9 @@ Every page is a Server Component; `"use client"` lives only in the components
 named below. The root layout prefetches `me` and wraps the tree in
 `HydrationBoundary`; `SiteHeader` (client) reads it.
 
-- `/` — the event list. Prefetches the list; renders `EventList`.
+- `/` — the event list. Prefetches the list; renders `EventList`, whose
+  "Created" dates are `LocalDate` islands (viewer's time zone, like
+  `LocalDateTime`).
 - `/events/[id]` — event detail (rendered per request, `notFound()` → HTTP
   404). Renders `EventDetail`; the dates (`LocalDateTime`, viewer's time zone)
   and the owner's Edit/Delete (`EventOwnerActions`, `DeleteEventDialog`) are
