@@ -60,8 +60,8 @@ When you fix a bug, write the test that fails without the fix, and say so in a
 comment:
 
 ```ts
-// Regression: @fastify/cors defaults to GET,HEAD,POST, which silently blocked
-// every edit and delete from the browser.
+// Regression: the error handler turned a malformed request's 400 into a 500,
+// so the client showed a server fault instead of the validation message.
 ```
 
 Then verify it has teeth — revert the fix, watch it fail, restore. A regression

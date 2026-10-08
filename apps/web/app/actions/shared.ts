@@ -14,12 +14,15 @@ export const textFields = (formData: FormData) =>
         string
     >;
 
+/** The banner when there is nothing more specific to say. */
+const FALLBACK_ERROR = "Something went wrong. Please try again.";
+
 /** The API's error, mapped onto the form: 400 issues per field, anything else as the banner. */
 export const apiFailure = async (response: Response, values?: Record<string, string>): Promise<FormState> => {
     const body = await response.json().catch(() => null);
     return Array.isArray(body?.issues)
         ? { fieldErrors: issuesByField(body.issues), values }
-        : { formError: body?.message ?? "Something went wrong", values };
+        : { formError: body?.message ?? FALLBACK_ERROR, values };
 };
 
 /**
@@ -35,9 +38,7 @@ export const send = async (method: string, path: string, body?: unknown) => {
         response = await serverFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
     } catch (error) {
         console.error(`${method} ${path}: API call failed`, error);
-        return new Response(JSON.stringify({ message: "Something went wrong. Please try again." }), {
-            status: 503,
-        });
+        return new Response(JSON.stringify({ message: FALLBACK_ERROR }), { status: 503 });
     }
 
     await applySessionCookie(response);

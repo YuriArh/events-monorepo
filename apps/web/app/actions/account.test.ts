@@ -97,6 +97,13 @@ describe("resendVerification", () => {
 
         expect((await resendVerification({}, form({}))).formError).toBe("Too many requests");
     });
+
+    // The same text as for an unreachable API (see auth.test.ts).
+    it("falls back to the generic message for an error without one", async () => {
+        vi.mocked(serverFetch).mockResolvedValue(new Response("Bad Gateway", { status: 502 }));
+
+        expect((await resendVerification({}, form({}))).formError).toBe("Something went wrong. Please try again.");
+    });
 });
 
 describe("logoutAll", () => {

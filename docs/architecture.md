@@ -325,7 +325,7 @@ development; production needs object storage.
 | `API_INTERNAL_URL`    | web      | Where the Next server (and the dev rewrites) reach Fastify. Defaults to `http://localhost:4000`. Needed at build time (rewrites) and at runtime |
 | `API_PROXY`           | web      | `off` disables the dev rewrites of `/api` and `/uploads` (set it behind nginx). Build time: baked in by `next build` |
 | `SITE_URL`            | web      | `metadataBase`. Defaults to `http://localhost:3000` |
-| `TRUSTED_PROXY`       | api      | Comma-separated addresses whose `X-Forwarded-For` Fastify trusts (`trustProxy`). Defaults to `127.0.0.1,::1` |
+| `TRUSTED_PROXY`       | api      | Comma-separated addresses whose `X-Forwarded-For` Fastify trusts (`trustProxy`). Defaults to `127.0.0.1,::1`. In production it must list nginx **and** the Next server (see Deploying) |
 | `WEB_ORIGIN`          | api      | Origin check, links in emails. Defaults to `http://localhost:3000`. An `https:` origin makes the session cookie `Secure` |
 | `NODE_ENV`            | api, db  | `development` (set by the api `dev` script) and `test` (set by Vitest) allow the console mailer; anything else, including unset, requires an injected `Mailer` and is treated as production. `production` also makes the db seed refuse to run |
 
