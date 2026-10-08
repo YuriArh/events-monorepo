@@ -17,7 +17,7 @@ This is the default for all event and user data.
 | --- | --- |
 | How the server knows the user | The API is **same-origin for the browser**: `/api/*` and `/uploads/*` on the web host reach Fastify, so the `sid` cookie belongs to the web host; the server reads it with `cookies()` and forwards it to the API. The web code doesn't care who proxies. |
 | Who proxies | **Development:** Next `rewrites` (on unless `API_PROXY=off`). **Production:** nginx in front of both apps routes `/api` and `/uploads` straight to Fastify and everything else to Next; Next's rewrites are switched off. |
-| Client IP behind the proxy | API `trustProxy` from `TRUSTED_PROXY` (default loopback; in production the nginx address/subnet). |
+| Client IP behind the proxy | API `trustProxy` from `TRUSTED_PROXY` (default loopback). In production it lists **every hop that connects to the API: nginx and the Next server**; Next is reachable only through nginx, and nginx **appends** the client IP (`$proxy_add_x_forwarded_for`). |
 | Reading events and the user | **Server prefetch into TanStack Query + `HydrationBoundary`** — the default. Client components read with `useQuery` and the same query options. |
 | Simple forms (sign-in, register, forgot/reset password, verify email, account, sign-out) | **Server Actions** with `useActionState`; work without JavaScript. |
 | Complex interactive forms (create/edit event, and future ones like it) | **TanStack Form + TanStack Query mutations** against `/api` through the proxy, then `invalidateQueries`. |
@@ -181,7 +181,17 @@ API's own Origin check still guards `/api` writes through the proxy.
   `serverFetch` forward in `X-Forwarded-For` is what rate limits key on.
   Trusting nobody would make every visitor share the proxy's IP (per-IP
   limits become global); trusting everybody would let anyone spoof
-  `X-Forwarded-For` and dodge limits. In production set it to nginx's address.
+  `X-Forwarded-For` and dodge limits.
+- Production trust model. Two hops connect to the API: nginx (browser `/api`
+  traffic) and the Next server (`serverFetch` from rendering and Server
+  Actions), so `TRUSTED_PROXY` must list **both** addresses — trusting only
+  nginx would make all Server Action traffic (sign-in included) share Next's
+  rate-limit bucket. Next forwards the incoming `X-Forwarded-For` as-is and
+  only fills it when absent, so the chain is trustworthy only if (a) Next is
+  not publicly reachable around nginx and (b) nginx appends the real client
+  IP with `$proxy_add_x_forwarded_for`; the API then takes the rightmost
+  untrusted address, which is the one nginx appended. In development a client
+  talking to Next directly can choose its own forwarded IP — acceptable there.
 
 ## What is removed
 
