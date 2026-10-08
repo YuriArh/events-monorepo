@@ -36,7 +36,21 @@ const apiFailure = async (response: Response, values?: Record<string, string>): 
         : { formError: body?.message ?? "Something went wrong", values };
 };
 
-const post = (path: string, body: unknown) => serverFetch(path, { method: "POST", body: JSON.stringify(body) });
+/**
+ * POSTs to the API. An unreachable API (connection refused, DNS) becomes a
+ * 503 the form shows as its banner, instead of the action throwing into
+ * Next's error page.
+ */
+const post = async (path: string, body: unknown) => {
+    try {
+        return await serverFetch(path, { method: "POST", body: JSON.stringify(body) });
+    } catch (error) {
+        console.error(`POST ${path}: API call failed`, error);
+        return new Response(JSON.stringify({ message: "Something went wrong. Please try again." }), {
+            status: 503,
+        });
+    }
+};
 
 export async function login(_state: FormState, formData: FormData): Promise<FormState> {
     const data = textFields(formData);

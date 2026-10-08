@@ -181,6 +181,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
     );
 }
 
+const NO_FIELDS = new Set<string>();
+
 export function VerifyEmailForm({ token }: { token: string }) {
     const [state, formAction, pending] = useActionState(verifyEmail, {});
 
@@ -197,7 +199,8 @@ export function VerifyEmailForm({ token }: { token: string }) {
     return (
         <form action={formAction} {...stylex.props(authStyles.form)}>
             <input type="hidden" name="token" value={token} />
-            <FormBanner message={state.formError ?? null} />
+            {/* No inputs besides the hidden token: any field error goes in the banner. */}
+            <FormBanner message={bannerFor(state, NO_FIELDS)} />
             <div {...stylex.props(authStyles.actions)}>
                 <Button type="submit" disabled={pending}>
                     Confirm email

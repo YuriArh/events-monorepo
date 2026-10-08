@@ -73,6 +73,21 @@ describe("login", () => {
         expect(state).toEqual({ formError: "Invalid email or password", values: { email: "a@example.com" } });
     });
 
+    it("shows a banner, not an error page, when the API is unreachable", async () => {
+        vi.mocked(serverFetch).mockRejectedValue(new TypeError("fetch failed"));
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const state = await login({}, form({ email: "a@example.com", password: "secret-pw", next: "/" }));
+        consoleError.mockRestore();
+
+        expect(state).toEqual({
+            formError: "Something went wrong. Please try again.",
+            values: { email: "a@example.com" },
+        });
+        expect(applySessionCookie).not.toHaveBeenCalled();
+        expect(redirect).not.toHaveBeenCalled();
+    });
+
     it("relays the session cookie and redirects to the safe next path", async () => {
         const response = json(200, { user: {} });
         vi.mocked(serverFetch).mockResolvedValue(response);
