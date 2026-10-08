@@ -130,7 +130,7 @@ return (
 
 | Route | Server | Client component (SSR-rendered, cache-backed) |
 | --- | --- | --- |
-| layout | prefetch `me`, `metadataBase` from `SITE_URL` | `SiteHeader` (`useQuery(meQuery())`); Sign out = `<form action={logout}>` |
+| layout | prefetch `me`, `metadataBase` from `SITE_URL` | `SiteHeader` (`useQuery(meQuery())`); Sign out = `<form action={logout}>` (its `onSubmit` also sets the cached `me` to `null` at once) |
 | `/` | prefetch list | `EventList` — table, owner Edit/Delete via `canModifyEvent(me)`, `DeleteEventDialog` |
 | `/events/[id]` | `queryClient.query(detail)`; `null` → `notFound()` (real 404); `generateMetadata` from the same cached query | `EventDetail` — today's markup, `LocalDateTime`, owner actions |
 | `/events/new` | guard (`getMe()` → `redirect("/login?next=/events/new")`) | `NewEventForm` — TanStack Form + `useMutation` (upload via `/api/events/upload`, create via `/api/events`), invalidate `eventKeys.all`, `router.push` |

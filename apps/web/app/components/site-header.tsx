@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { logout } from "@/actions/auth";
 import { Button, buttonStyleProps } from "@/components/ui/button";
-import { meQuery } from "@/lib/queries";
+import { meKey, meQuery } from "@/lib/queries";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -34,6 +34,7 @@ const styles = stylex.create({
 export function SiteHeader() {
     // Prefetched by the root layout, so this is the visitor from the first render on.
     const { data: me } = useQuery(meQuery());
+    const queryClient = useQueryClient();
 
     return (
         <header {...stylex.props(styles.header)}>
@@ -49,7 +50,10 @@ export function SiteHeader() {
                             <Link href="/account" {...buttonStyleProps("ghost", "sm")}>
                                 Account
                             </Link>
-                            <form action={logout}>
+                            {/* Still a plain form submission (works without JS); onSubmit only
+                                drops the cached user at once, so a header re-rendered before the
+                                server's answer can't show it signed in. */}
+                            <form action={logout} onSubmit={() => queryClient.setQueryData(meKey, null)}>
                                 <Button type="submit" variant="outline" size="sm">
                                     Sign out
                                 </Button>
