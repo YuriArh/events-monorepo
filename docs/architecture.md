@@ -382,32 +382,9 @@ Two must-dos:
 2. Never cache `/api` responses in nginx: a cached `Set-Cookie` would hand one
    user's session to another. Only `/uploads` may be cached.
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name app.example.com;
-
-    client_max_body_size 5m; # image uploads
-
-    location /api/ {
-        proxy_pass http://api:4000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /uploads/ {
-        proxy_pass http://api:4000;
-    }
-
-    location / {
-        proxy_pass http://web:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+The step-by-step recipe — server setup, env files, systemd units, the full
+nginx config, HTTPS, updates and troubleshooting — is in
+[deployment.md](deployment.md).
 
 ## Cross-origin access
 
