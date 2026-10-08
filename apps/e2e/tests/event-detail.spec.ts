@@ -54,10 +54,12 @@ test.describe("event detail page", () => {
         const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
         const page = await context.newPage();
 
-        const meResponse = page.waitForResponse((r) => r.url().endsWith("/api/auth/me"));
         await page.goto(`${baseURL}/events/${eventId}`);
         await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-        expect((await meResponse).status()).toBe(401);
+        // The visitor is resolved on the server and hydrated; "Sign in" shows it is known to be nobody.
+        await expect(
+            page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Sign in" }),
+        ).toBeVisible();
         await expect(page.getByRole("link", { name: "Edit", exact: true })).toBeHidden();
         await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeHidden();
 
