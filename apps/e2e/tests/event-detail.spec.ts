@@ -47,7 +47,10 @@ test.describe("event detail page", () => {
         const response = await request.get(`${baseURL}/events/${eventId}`);
 
         expect(response.status()).toBe(200);
-        expect(await response.text()).toContain(name);
+        const html = await response.text();
+        expect(html).toContain(name);
+        // The signed-in owner's session is resolved on the server too.
+        expect(html).toContain("Edit");
     });
 
     test("hides owner actions from signed-out visitors", async ({ browser, baseURL }) => {
@@ -56,7 +59,7 @@ test.describe("event detail page", () => {
 
         await page.goto(`${baseURL}/events/${eventId}`);
         await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-        // The visitor is resolved on the server and hydrated; "Sign in" shows it is known to be nobody.
+        // The HTML is already final because `me` is server-rendered (hydrated as null); "Sign in" shows it is known to be nobody.
         await expect(
             page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Sign in" }),
         ).toBeVisible();
