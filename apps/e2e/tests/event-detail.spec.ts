@@ -50,7 +50,22 @@ test.describe("event detail page", () => {
         const html = await response.text();
         expect(html).toContain(name);
         // The signed-in owner's session is resolved on the server too.
-        expect(html).toContain("Edit");
+        expect(html).toContain(`href="/events/${eventId}/edit"`);
+    });
+
+    test("does not render the owner link in the server HTML for signed-out visitors", async ({
+        playwright,
+        baseURL,
+    }) => {
+        // Explicitly empty: a new context otherwise inherits the project's signed-in storage state.
+        const anonymous = await playwright.request.newContext({ storageState: { cookies: [], origins: [] } });
+        try {
+            const html = await (await anonymous.get(`${baseURL}/events/${eventId}`)).text();
+            expect(html).toContain(name);
+            expect(html).not.toContain(`href="/events/${eventId}/edit"`);
+        } finally {
+            await anonymous.dispose();
+        }
     });
 
     test("hides owner actions from signed-out visitors", async ({ browser, baseURL }) => {

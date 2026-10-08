@@ -31,7 +31,7 @@ calculation, non-trivial invariants. A passthrough plus a not-found throw isn't.
 `apps/api/src/**/*.test.ts`, run against the real `eventapp_test` database.
 
 - Use `buildApp()` + `app.inject()` — no port binding, but the full request
-  lifecycle including CORS and the error handler.
+  lifecycle including the error handler.
 - `vitest.setup.ts` truncates tables before each test; `fileParallelism` is off
   because tests share one database.
 - `DATABASE_URL` is set in `vitest.config.ts` (not a setup file) because
@@ -67,6 +67,13 @@ comment:
 Then verify it has teeth — revert the fix, watch it fail, restore. A regression
 test that passes against the broken code is worse than none.
 
+## Server Actions and server rendering
+
+Server Actions (`apps/web/app/actions/*`) are unit-tested next to the action
+with `vi.mock("@/lib/api.server")` (so no API is needed) and a mock of
+`next/navigation` (`redirect` throws, as in Next) and `next/headers` where
+cookies are set. Assert the returned `FormState` and the calls made to the API.
+
 ## E2E
 
 `apps/e2e` is its own workspace package because the suite spans both apps. The
@@ -75,6 +82,10 @@ running locally.
 
 - Select by role and accessible name (`getByRole("button", { name: "Save" })`),
   never by StyleX class — those hashes change every build.
+- Server-rendered HTML can be asserted without a browser:
+  `await (await request.get(`${baseURL}/…`)).text()` carries the signed-in
+  user's cookie from the storage state (use `playwright.request.newContext()`
+  for a signed-out request). See `ssr.spec.ts`.
 - Name fixtures uniquely per run and clean up afterwards; specs run against the
   development database, not a dedicated one. Deleting an event through the
   API also deletes its venue, so deleting the events a test created is enough.
