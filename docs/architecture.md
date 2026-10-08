@@ -322,14 +322,28 @@ development; production needs object storage.
 | Variable              | Used by  | Notes                                     |
 | --------------------- | -------- | ----------------------------------------- |
 | `DATABASE_URL`        | api, db  | `apps/api/.env`, `packages/db/.env`        |
-| `API_INTERNAL_URL`    | web      | Where the Next server (and the dev rewrites) reach Fastify. Defaults to `http://localhost:4000` |
-| `API_PROXY`           | web      | `off` disables the dev rewrites of `/api` and `/uploads` (set it behind nginx) |
+| `API_INTERNAL_URL`    | web      | Where the Next server (and the dev rewrites) reach Fastify. Defaults to `http://localhost:4000`. Needed at build time (rewrites) and at runtime |
+| `API_PROXY`           | web      | `off` disables the dev rewrites of `/api` and `/uploads` (set it behind nginx). Build time: baked in by `next build` |
 | `SITE_URL`            | web      | `metadataBase`. Defaults to `http://localhost:3000` |
 | `TRUSTED_PROXY`       | api      | Comma-separated addresses whose `X-Forwarded-For` Fastify trusts (`trustProxy`). Defaults to `127.0.0.1,::1` |
 | `WEB_ORIGIN`          | api      | Origin check, links in emails. Defaults to `http://localhost:3000`. An `https:` origin makes the session cookie `Secure` |
 | `NODE_ENV`            | api, db  | `development` (set by the api `dev` script) and `test` (set by Vitest) allow the console mailer; anything else, including unset, requires an injected `Mailer` and is treated as production. `production` also makes the db seed refuse to run |
 
 `.env` files are gitignored; `packages/db/.env.example` is the reference.
+
+**`API_PROXY` and `API_INTERNAL_URL` are build-time for the rewrites.** Next
+evaluates `rewrites()` during `next build` and bakes the result into the build
+manifest; `next start` reads that manifest and never re-runs it. So set both
+for the build (behind nginx: `API_PROXY=off`), not only when starting.
+`API_INTERNAL_URL` is also read at runtime by `serverFetch`, so set it for
+`next start` too.
+
+Turborepo 2 runs tasks in strict env mode: a task sees only the variables it
+declares. `apps/web/turbo.json` declares the web variables for `build` and
+`dev` (so they reach Next and are part of the build's cache key),
+`apps/api/turbo.json` declares `TRUSTED_PROXY` and `WEB_ORIGIN` for `dev`, and
+`apps/e2e/turbo.json` passes all five to the Playwright run that boots both
+apps. Declare a new variable there when an app starts reading one.
 
 `pnpm --filter api start` sets no `NODE_ENV`, so it refuses to start
 ("A real Mailer must be configured…") until a real `Mailer` is wired into
@@ -341,8 +355,10 @@ links to the console.
 Production layout: nginx in front, three upstream roles.
 
 - `/api/` and `/uploads/` go straight to Fastify.
-- `/` goes to Next, started with `API_PROXY=off` (nginx does the proxying the
-  dev rewrites do locally). Set `API_INTERNAL_URL` to Fastify's address.
+- `/` goes to Next, built with `API_PROXY=off` (nginx does the proxying the
+  dev rewrites do locally). Set `API_INTERNAL_URL` to Fastify's address for
+  both `next build` and `next start`: the rewrites are fixed at build time
+  (see Environment).
 - Fastify and Next are not public: reachable only through nginx.
 - **`TRUSTED_PROXY`** must list nginx's address **and the Next server's**.
   Both connect to the API; listing only nginx would put every Server Action

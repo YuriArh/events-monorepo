@@ -56,7 +56,14 @@ The web code only assumes "the API answers on this origin under `/api` and
   Fastify, `location /` → Next, `proxy_set_header X-Forwarded-For`,
   `client_max_body_size 5m`. API traffic then bypasses the Next process
   entirely (no extra hop, no Next load, Next isn't a single point of failure
-  for `/api`), and Fastify needn't be public. Run Next with `API_PROXY=off`.
+  for `/api`), and Fastify needn't be public. Build Next with `API_PROXY=off`.
+
+`rewrites()` is evaluated by `next build` and baked into the build manifest,
+which `next start` reads, so `API_PROXY` and `API_INTERNAL_URL` must be set
+for the build (`API_INTERNAL_URL` also at runtime, for `serverFetch`). Turbo's
+strict env mode only passes declared variables, so the apps' `turbo.json`
+files declare them (web: `API_INTERNAL_URL`, `API_PROXY`, `SITE_URL`; api:
+`TRUSTED_PROXY`, `WEB_ORIGIN`).
 
 Server-side calls (`serverFetch`) always go straight to `API_INTERNAL_URL`.
 `NEXT_PUBLIC_API_URL` is removed. A ready-made nginx/compose deployment is out

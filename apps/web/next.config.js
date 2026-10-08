@@ -3,7 +3,8 @@ const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000"
 
 /**
  * Development proxy. In production nginx routes /api and /uploads straight to
- * Fastify (docs/architecture.md → Deploying) and Next runs with API_PROXY=off.
+ * Fastify (docs/architecture.md → Deploying) and Next is built with API_PROXY=off:
+ * rewrites() runs at `next build`, so these variables must be set for the build.
  */
 const proxyEnabled = process.env.API_PROXY !== "off";
 

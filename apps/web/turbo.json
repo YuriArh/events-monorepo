@@ -1,0 +1,12 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": ["API_INTERNAL_URL", "API_PROXY", "SITE_URL"]
+    },
+    "dev": {
+      "env": ["API_INTERNAL_URL", "API_PROXY", "SITE_URL"]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "env": ["TRUSTED_PROXY", "WEB_ORIGIN"]
+    }
+  }
+}
