@@ -5,12 +5,11 @@ import * as stylex from "@stylexjs/stylex";
 import { useQuery } from "@tanstack/react-query";
 
 import { changePassword, deleteAccount, logoutAll, resendVerification, updateProfile } from "@/actions/account";
-import { FormBanner, authStyles } from "@/components/auth-page";
+import { FormBanner, FormSuccess, authStyles } from "@/components/auth-page";
 import { Card, CardContent } from "@/components/card";
 import { TextField } from "@/components/text-field";
 import { Button } from "@/components/ui/button";
-import { uncoveredMessage } from "@/lib/form-errors";
-import type { FormState } from "@/lib/form-state";
+import { NO_FIELDS, bannerFor } from "@/lib/form-errors";
 import { meQuery } from "@/lib/queries";
 import { colors, typography } from "@/styles/tokens.stylex";
 
@@ -25,10 +24,6 @@ const styles = stylex.create({
     muted: { color: colors.mutedForeground },
 });
 
-/** The action's form-level error, or a field error no input on this form shows. */
-const bannerFor = (state: FormState, fields: ReadonlySet<string>) =>
-    state.formError ?? uncoveredMessage(state.fieldErrors ?? {}, fields);
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <Card>
@@ -37,16 +32,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
                 {children}
             </CardContent>
         </Card>
-    );
-}
-
-function Success({ message }: { message?: string }) {
-    if (!message) return null;
-
-    return (
-        <p role="status" {...stylex.props(authStyles.success, typography.sm)}>
-            {message}
-        </p>
     );
 }
 
@@ -79,8 +64,6 @@ function ProfileSection({ name, email }: { name: string | null; email: string })
     );
 }
 
-const NO_FIELDS = new Set<string>();
-
 function VerificationSection() {
     const [state, formAction, pending] = useActionState(resendVerification, {});
 
@@ -110,7 +93,7 @@ function PasswordSection() {
         <Section title="Password">
             <form action={formAction} {...stylex.props(authStyles.form)}>
                 <FormBanner message={bannerFor(state, PASSWORD_FIELDS)} />
-                <Success message={state.message} />
+                <FormSuccess message={state.message} />
                 <TextField
                     id="currentPassword"
                     name="currentPassword"

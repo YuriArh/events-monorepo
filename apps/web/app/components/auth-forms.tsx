@@ -5,12 +5,10 @@ import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
 
 import { forgotPassword, login, register, resetPassword, verifyEmail } from "@/actions/auth";
-import { FormBanner, authStyles } from "@/components/auth-page";
+import { FormBanner, FormSuccess, authStyles } from "@/components/auth-page";
 import { TextField } from "@/components/text-field";
 import { Button } from "@/components/ui/button";
-import { uncoveredMessage } from "@/lib/form-errors";
-import type { FormState } from "@/lib/form-state";
-import { typography } from "@/styles/tokens.stylex";
+import { NO_FIELDS, bannerFor } from "@/lib/form-errors";
 
 /*
  * The auth forms post to Server Actions, so they work before (or without)
@@ -18,10 +16,6 @@ import { typography } from "@/styles/tokens.stylex";
  * the contracts. React resets a form after its action, so typed values come
  * back through `state.values` (never passwords).
  */
-
-/** The action's form-level error, or a field error no input on this form shows. */
-const bannerFor = (state: FormState, fields: ReadonlySet<string>) =>
-    state.formError ?? uncoveredMessage(state.fieldErrors ?? {}, fields);
 
 const LOGIN_FIELDS = new Set(["email", "password"]);
 
@@ -112,13 +106,7 @@ const FORGOT_FIELDS = new Set(["email"]);
 export function ForgotPasswordForm() {
     const [state, formAction, pending] = useActionState(forgotPassword, {});
 
-    if (state.message) {
-        return (
-            <p role="status" {...stylex.props(authStyles.success, typography.sm)}>
-                {state.message}
-            </p>
-        );
-    }
+    if (state.message) return <FormSuccess message={state.message} />;
 
     return (
         <form action={formAction} {...stylex.props(authStyles.form)}>
@@ -149,9 +137,10 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
     if (state.message) {
         return (
-            <p role="status" {...stylex.props(authStyles.success, typography.sm)}>
-                {state.message} <Link href="/login">Sign in</Link> with the new password.
-            </p>
+            <FormSuccess message={state.message}>
+                {" "}
+                <Link href="/login">Sign in</Link> with the new password.
+            </FormSuccess>
         );
     }
 
@@ -181,18 +170,10 @@ export function ResetPasswordForm({ token }: { token: string }) {
     );
 }
 
-const NO_FIELDS = new Set<string>();
-
 export function VerifyEmailForm({ token }: { token: string }) {
     const [state, formAction, pending] = useActionState(verifyEmail, {});
 
-    if (state.message) {
-        return (
-            <p role="status" {...stylex.props(authStyles.success, typography.sm)}>
-                {state.message}
-            </p>
-        );
-    }
+    if (state.message) return <FormSuccess message={state.message} />;
 
     if (!token) return <FormBanner message="This link is missing its token." />;
 

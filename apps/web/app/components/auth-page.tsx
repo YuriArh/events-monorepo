@@ -69,6 +69,18 @@ export function AuthPage({
     );
 }
 
+/** A form's success text (`children` may add to it, e.g. a link); nothing without a message. */
+export function FormSuccess({ message, children }: { message?: string; children?: React.ReactNode }) {
+    if (!message) return null;
+
+    return (
+        <p role="status" {...stylex.props(authStyles.success, typography.sm)}>
+            {message}
+            {children}
+        </p>
+    );
+}
+
 /** The error banner shown for issues no field renders inline. */
 export function FormBanner({ message }: { message: string | null }) {
     if (!message) return null;
