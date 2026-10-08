@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/card";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

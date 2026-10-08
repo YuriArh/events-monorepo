@@ -16,26 +16,55 @@ export type TextFieldProps = {
     label: string;
     type?: "text" | "email" | "password";
     autoComplete?: string;
-    value: string;
-    onChange: (value: string) => void;
+    /** The FormData key — what a Server Action reads. */
+    name?: string;
+    /** Controlled use: value + onChange. Uncontrolled (Server Action forms): defaultValue. */
+    value?: string;
+    onChange?: (value: string) => void;
+    defaultValue?: string;
     onBlur?: () => void;
+    required?: boolean;
+    minLength?: number;
+    maxLength?: number;
     error?: string;
 };
 
 /** Label + Input + inline error, so every auth form renders a field the same way. */
-export function TextField({ id, label, type = "text", autoComplete, value, onChange, onBlur, error }: TextFieldProps) {
+export function TextField({
+    id,
+    label,
+    type = "text",
+    autoComplete,
+    name,
+    value,
+    onChange,
+    defaultValue,
+    onBlur,
+    required,
+    minLength,
+    maxLength,
+    error,
+}: TextFieldProps) {
     const errorId = `${id}-error`;
 
     return (
         <div {...stylex.props(styles.field)}>
             <Label htmlFor={id}>{label}</Label>
             <Input
+                // Base UI's input doesn't take a new defaultValue after mount
+                // (it warns); a Server Action echoing the typed value remounts it.
+                key={defaultValue}
                 id={id}
+                name={name}
                 type={type}
                 autoComplete={autoComplete}
                 value={value}
+                defaultValue={defaultValue}
+                required={required}
+                minLength={minLength}
+                maxLength={maxLength}
                 onBlur={onBlur}
-                onChange={(event) => onChange(event.target.value)}
+                onChange={onChange && ((event) => onChange(event.target.value))}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
             />
