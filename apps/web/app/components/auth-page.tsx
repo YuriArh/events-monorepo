@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/card";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -66,6 +66,18 @@ export function AuthPage({
                 {footer && <div {...stylex.props(styles.footer, typography.sm)}>{footer}</div>}
             </main>
         </div>
+    );
+}
+
+/** A form's success text (`children` may add to it, e.g. a link); nothing without a message. */
+export function FormSuccess({ message, children }: { message?: string; children?: React.ReactNode }) {
+    if (!message) return null;
+
+    return (
+        <p role="status" {...stylex.props(authStyles.success, typography.sm)}>
+            {message}
+            {children}
+        </p>
     );
 }
 

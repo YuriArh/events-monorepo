@@ -81,3 +81,42 @@ describe("Origin check", () => {
         expect(response.statusCode).toBe(200);
     });
 });
+
+describe("behind the web proxy", () => {
+    // The web app proxies browser calls and forwards the client's IP; without
+    // trusting it, every visitor would share the proxy's rate-limit bucket.
+    it("rate-limits by the forwarded client IP, not the proxy's", async () => {
+        const attempt = (clientIp: string) =>
+            app.inject({
+                method: "POST",
+                url: "/api/auth/login",
+                remoteAddress: "127.0.0.1",
+                headers: { "x-forwarded-for": clientIp },
+                payload: { email: "proxied@example.test", password: "guess" },
+            });
+
+        for (let i = 0; i < 5; i += 1) {
+            expect((await attempt("203.0.113.7")).statusCode).toBe(401);
+        }
+
+        expect((await attempt("203.0.113.7")).statusCode).toBe(429);
+        expect((await attempt("198.51.100.9")).statusCode).toBe(401);
+    });
+
+    it("ignores X-Forwarded-For from an untrusted peer", async () => {
+        const attempt = (spoofed: string) =>
+            app.inject({
+                method: "POST",
+                url: "/api/auth/login",
+                remoteAddress: "203.0.113.50",
+                headers: { "x-forwarded-for": spoofed },
+                payload: { email: "spoofed@example.test", password: "guess" },
+            });
+
+        for (let i = 0; i < 5; i += 1) {
+            expect((await attempt(`198.51.100.${i + 1}`)).statusCode).toBe(401);
+        }
+
+        expect((await attempt("198.51.100.99")).statusCode).toBe(429);
+    });
+});

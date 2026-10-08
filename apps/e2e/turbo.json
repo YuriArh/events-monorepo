@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test:e2e": {
+      "env": ["API_INTERNAL_URL", "API_PROXY", "SITE_URL", "TRUSTED_PROXY", "WEB_ORIGIN"]
+    }
+  }
+}

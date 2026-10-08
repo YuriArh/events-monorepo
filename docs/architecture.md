@@ -20,26 +20,99 @@ databases: `eventapp` for development and `eventapp_test` for integration tests.
 ## Data flow
 
 ```
-browser → TanStack Query → app/lib/events.ts (fetch)
-        → Fastify route → service → repository → Prisma → Postgres
+browser ── /api/*, /uploads/* (same origin) ──▶ proxy ──▶ Fastify
+   ▲                                      (dev: Next rewrites; prod: nginx)
+   │ HTML + dehydrated query cache
+Next server (Server Components, Server Actions)
+   └── serverFetch: absolute API_INTERNAL_URL + forwarded Cookie / client IP ──▶ Fastify
+
+Fastify route → service → repository → Prisma → Postgres
 ```
 
-The web app talks to the API over HTTP; it does not import `@repo/db`. Only
-`apps/api` touches the database.
+The browser only ever talks to the web origin, so the `sid` cookie belongs to
+the web host and the Next server can read it. The Next server calls the API
+directly with `serverFetch`/`serverRequest` (`lib/api.server.ts`), forwarding
+the visitor's cookie and IP. The browser uses the same `apiFetch`/`request`
+core (`lib/api.ts`) with relative URLs. The web app does not import
+`@repo/db`; only `apps/api` touches the database.
 
 ## Web app routes
 
-- `/` — the event list.
-- `/events/[id]` — event detail. A Server Component (rendered per request,
-  `notFound()` → HTTP 404); only the dates (`LocalDateTime`, viewer's time
-  zone) and the owner's Edit/Delete (`EventOwnerActions`) are client islands.
-- `/events/new` — create form.
-- `/events/[id]/edit` — edit form, including the venue, which is sent inside the event payload.
+Every page is a Server Component; `"use client"` lives only in the components
+named below. The root layout prefetches `me` and wraps the tree in
+`HydrationBoundary`; `SiteHeader` (client) reads it.
+
+- `/` — the event list. Prefetches the list; renders `EventList`, whose
+  "Created" dates are `LocalDate` islands (viewer's time zone, like
+  `LocalDateTime`).
+- `/events/[id]` — event detail (rendered per request, `notFound()` → HTTP
+  404). Renders `EventDetail`; the dates (`LocalDateTime`, viewer's time zone)
+  and the owner's Edit/Delete (`EventOwnerActions`, `DeleteEventDialog`) are
+  client islands.
+- `/events/new` — create form (`NewEventForm` → `EventForm`). Guarded on the
+  server: signed out → redirect to `/login?next=…` in the HTTP response.
+- `/events/[id]/edit` — `EditEventForm` (venue included, sent inside the event
+  payload). Guarded on the server (sign-in and `canModifyEvent`); the event is
+  prefetched and hydrated into the form.
+- `/login`, `/register`, `/forgot-password`, `/reset-password`,
+  `/verify-email` — `AuthPage` plus the matching form from `auth-forms`,
+  submitted through Server Actions (`app/actions/auth.ts`).
+- `/account` — `AccountSections`, guarded on the server, Server Actions in
+  `app/actions/account.ts`.
+
+**Card.** The vendored `components/ui/card.tsx` uses React context without
+`"use client"`, so a Server Component can't render it. Server Components import
+`Card`/`CardContent` from `components/card.tsx`, a client re-export of it. Do
+not import `components/ui/card` from a Server Component.
 
 Create and edit are full routes, not a dialog over the list page: the list's
 "New Event" and per-row edit controls are links (`next/link`), not buttons
 that open a modal. Only the delete confirmation is a dialog, since it doesn't
 need a form.
+
+## Data on the web
+
+Events and the current user are fetched **on the server, into the TanStack
+Query cache**, and read on the client with `useQuery`:
+
+- `lib/queries.ts` holds the shared query options (`eventQueries.list/detail`,
+  `meQuery`, `meKey`) parameterised by a fetcher, so the server prefetch and
+  the client `useQuery` use the same key and function.
+- A page gets the per-request server client with `getServerQueryClient()`
+  (`lib/query-client.server.ts`: React `cache`, no retry, `staleTime > 0`),
+  fills it with `prefetch(queryClient, options)` (same file:
+  `queryClient.query(options)` with errors swallowed, so the client's
+  `useQuery` shows them) or awaits `queryClient.query(options)` when it needs
+  the data itself, passing `serverRequest` as the fetcher, and renders its
+  client component inside `<HydrationBoundary state={dehydrate(queryClient)}>`.
+  The browser uses the singleton from `lib/query-client.ts`. Use
+  `queryClient.query`: the older fetch/prefetch/ensure methods are deprecated
+  in the installed TanStack Query.
+- The current user is `getMe()` (`lib/session.server.ts`), deduplicated with
+  the layout's prefetch; pages use it to redirect or `notFound()` before any
+  HTML is sent. Pure helpers (`safeNext`, `canModifyEvent`) live in
+  `lib/session.ts`.
+
+**Mutations.** Simple forms (sign-in, registration, password flows, account)
+are Server Actions in `app/actions/*` using `useActionState` with the
+`FormState` from `lib/form-state.ts`; they work without JavaScript. The
+complex, interactive event form keeps TanStack Form and TanStack Query
+mutations through `/api`.
+
+**Cookies are set only in Server Actions** (and Route Handlers), never while
+rendering. Every Server Action calls the API through `send`/`post`
+(`app/actions/shared.ts`), which relays the `Set-Cookie` of every API answer
+with `cookies().set/delete` (`applySessionCookie`, `lib/set-cookie.ts`): sign-in
+sets it, sign-out clears it, and any action can carry a renewal. Actions that
+must end a session regardless (sign-out, sign-out everywhere, account
+deletion) also delete `sid` themselves.
+
+**Renewal limitation.** The API renews a session at most once a day by sending
+a fresh `Set-Cookie`. A Server Component render cannot set cookies, so a
+renewal triggered by a server-side fetch is not delivered to the browser; it
+happens when a browser-side `/api` call or Server Action next carries the
+session. A visitor who only browses server-rendered pages is therefore renewed
+late, not logged out early.
 
 ## API module layering
 
@@ -249,37 +322,75 @@ development; production needs object storage.
 | Variable              | Used by  | Notes                                     |
 | --------------------- | -------- | ----------------------------------------- |
 | `DATABASE_URL`        | api, db  | `apps/api/.env`, `packages/db/.env`        |
-| `NEXT_PUBLIC_API_URL` | web      | `apps/web/.env.local`, defaults to :4000   |
-| `WEB_ORIGIN`          | api      | CORS origin, Origin check, links in emails. Defaults to `http://localhost:3000`. An `https:` origin makes the session cookie `Secure` |
+| `API_INTERNAL_URL`    | web      | Where the Next server (and the dev rewrites) reach Fastify. Defaults to `http://localhost:4000`. Needed at build time (rewrites) and at runtime |
+| `API_PROXY`           | web      | `off` disables the dev rewrites of `/api` and `/uploads` (set it behind nginx). Build time: baked in by `next build` |
+| `SITE_URL`            | web      | `metadataBase`. Defaults to `http://localhost:3000` |
+| `TRUSTED_PROXY`       | api      | Comma-separated addresses whose `X-Forwarded-For` Fastify trusts (`trustProxy`). Defaults to `127.0.0.1,::1`. In production it must list nginx **and** the Next server (see Deploying) |
+| `WEB_ORIGIN`          | api      | Origin check, links in emails. Defaults to `http://localhost:3000`. An `https:` origin makes the session cookie `Secure` |
 | `NODE_ENV`            | api, db  | `development` (set by the api `dev` script) and `test` (set by Vitest) allow the console mailer; anything else, including unset, requires an injected `Mailer` and is treated as production. `production` also makes the db seed refuse to run |
 
 `.env` files are gitignored; `packages/db/.env.example` is the reference.
+
+**`API_PROXY` and `API_INTERNAL_URL` are build-time for the rewrites.** Next
+evaluates `rewrites()` during `next build` and bakes the result into the build
+manifest; `next start` reads that manifest and never re-runs it. So set both
+for the build (behind nginx: `API_PROXY=off`), not only when starting.
+`API_INTERNAL_URL` is also read at runtime by `serverFetch`, so set it for
+`next start` too.
+
+Turborepo 2 runs tasks in strict env mode: a task sees only the variables it
+declares. `apps/web/turbo.json` declares the web variables for `build` and
+`dev` (so they reach Next and are part of the build's cache key),
+`apps/api/turbo.json` declares `TRUSTED_PROXY` and `WEB_ORIGIN` for `dev`, and
+`apps/e2e/turbo.json` passes all five to the Playwright run that boots both
+apps. Declare a new variable there when an app starts reading one.
 
 `pnpm --filter api start` sets no `NODE_ENV`, so it refuses to start
 ("A real Mailer must be configured…") until a real `Mailer` is wired into
 `server.ts`. That is intentional: a deployment must never log password-reset
 links to the console.
 
-### Deploying
+## Deploying
 
-- **Same site.** The web app and API must share a registrable domain (e.g.
-  `app.example.com` + `api.example.com`). The session cookie is
-  `SameSite=Lax`, so on a different site (e.g. `example-web.com` +
-  `example-api.com`) the browser does not send it on the web app's
-  credentialed fetches, and every request looks signed out.
-- **`WEB_ORIGIN`** must be the exact public origin of the web app (`https://…`):
-  it drives CORS, the Origin check, email links and the `Secure` cookie flag.
+Production layout: nginx in front, three upstream roles.
+
+- `/api/` and `/uploads/` go straight to Fastify.
+- `/` goes to Next, built with `API_PROXY=off` (nginx does the proxying the
+  dev rewrites do locally). Set `API_INTERNAL_URL` to Fastify's address for
+  both `next build` and `next start`: the rewrites are fixed at build time
+  (see Environment).
+- Fastify and Next are not public: reachable only through nginx.
+- **`TRUSTED_PROXY`** must list nginx's address **and the Next server's**.
+  Both connect to the API; listing only nginx would put every Server Action
+  (sign-in included) in one shared rate-limit bucket, because the Next server
+  would be seen as a single client.
+- nginx appends the client IP with `$proxy_add_x_forwarded_for`. Never pass a
+  client-supplied `X-Forwarded-For` through unchanged.
+- **`WEB_ORIGIN`** is the public `https://` origin. It drives the Origin check,
+  email links and the `Secure` flag of the session cookie.
+- **Cookies need no nginx config.** The API sets `sid` without `Domain`, so
+  the browser binds it to the public host; nginx passes `Cookie`/`Set-Cookie`
+  through unchanged.
 - **`NODE_ENV`** should be `production`. Unset also fails closed, but
   `production` is what other tooling (Prisma, the seed guard) recognises.
-- **`trustProxy`.** Behind a reverse proxy or load balancer, configure
-  Fastify's `trustProxy` so `request.ip` is the client, not the proxy;
-  otherwise every client shares one rate-limit bucket.
 
-## CORS
+Two must-dos:
 
-The API allows exactly the web origin and the methods actually in use
-(`GET, POST, PATCH, DELETE`). `@fastify/cors` defaults to `GET,HEAD,POST`, so
-any new method must be added explicitly or the browser will block it while
-curl keeps working. There is a regression test for this.
+1. Pass `Host $host` to Next. Server Actions compare `Origin` with `Host` and
+   reject every action otherwise. If the public host differs from what Next
+   sees, set `serverActions.allowedOrigins`.
+2. Never cache `/api` responses in nginx: a cached `Set-Cookie` would hand one
+   user's session to another. Only `/uploads` may be cached.
 
-Requests are credentialed (`credentials: true`) so the session cookie is sent; this requires an exact origin, never `*`.
+The step-by-step recipe — server setup, env files, systemd units, the full
+nginx config, HTTPS, updates and troubleshooting — is in
+[deployment.md](deployment.md).
+
+## Cross-origin access
+
+The browser reaches the API only on the web origin (dev: Next rewrites; prod:
+nginx), so the API registers no CORS. The API trusts `X-Forwarded-For` only
+from `TRUSTED_PROXY`.
+
+Known follow-up: the `@fastify/cors` dependency is still listed in
+`apps/api/package.json` although nothing registers it; remove it.

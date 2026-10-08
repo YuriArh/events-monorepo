@@ -11,7 +11,7 @@ export default defineConfig({
         environment: "node",
         include: ["app/**/*.test.ts"],
         env: {
-            NEXT_PUBLIC_API_URL: "http://api.test",
+            API_INTERNAL_URL: "http://api.test",
         },
     },
 });

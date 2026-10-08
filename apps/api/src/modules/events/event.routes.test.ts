@@ -306,38 +306,6 @@ describe("POST /api/events/upload", () => {
     });
 });
 
-describe("CORS", () => {
-    // Without this the browser drops the session cookie on every API call.
-    it("allows credentialed requests from the web origin", async () => {
-        const response = await app.inject({
-            method: "OPTIONS",
-            url: "/api/events",
-            headers: {
-                origin: "http://localhost:3000",
-                "access-control-request-method": "POST",
-            },
-        });
-
-        expect(response.headers["access-control-allow-credentials"]).toBe("true");
-    });
-
-    // Regression: @fastify/cors defaults to GET,HEAD,POST, which silently blocked
-    // every edit and delete from the browser.
-    it.each(["PATCH", "DELETE"])("allows %s from the web origin", async (method) => {
-        const response = await app.inject({
-            method: "OPTIONS",
-            url: "/api/events/some-id",
-            headers: {
-                origin: "http://localhost:3000",
-                "access-control-request-method": method,
-            },
-        });
-
-        expect(response.headers["access-control-allow-methods"]).toContain(method);
-        expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
-    });
-});
-
 describe("event venue", () => {
     it("creates the venue with the event", async () => {
         const created = await createEvent({ address: VENUE });

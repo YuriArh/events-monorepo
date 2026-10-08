@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAddressLines, formatEventWhen, osmEmbedUrl, osmLinkUrl } from "./event-detail";
+import { formatAddressLines, formatDate, formatEventWhen, osmEmbedUrl, osmLinkUrl } from "./event-detail";
 
 describe("formatEventWhen", () => {
     it("shows one date and a time range for a same-day event", () => {
@@ -21,6 +21,17 @@ describe("formatEventWhen", () => {
 
     it("formats in the given time zone", () => {
         expect(formatEventWhen("2026-10-01T23:30:00.000Z", null, "Asia/Almaty")).toBe("Fri, Oct 2, 2026 · 04:30");
+    });
+});
+
+describe("formatDate", () => {
+    it("formats the day in UTC", () => {
+        expect(formatDate("2026-10-01T23:30:00.000Z", "UTC")).toBe("Oct 1, 2026");
+    });
+
+    // Why it must not run during render: the server's zone and the viewer's can disagree on the day.
+    it("formats the day in the given time zone", () => {
+        expect(formatDate("2026-10-01T23:30:00.000Z", "Asia/Almaty")).toBe("Oct 2, 2026");
     });
 });
 

@@ -17,10 +17,15 @@ pnpm test:e2e          # Playwright, boots both apps
 - **DRY** — one source of truth for each rule, shape and piece of UI. Reuse what
   exists (`@repo/contracts`, `lib/*` helpers, shared components) before adding a
   near-copy; extract once a second real use appears.
-- **Server rendering first** — in `apps/web`, pages and components are Server
-  Components by default. Fetch data on the server and render HTML there. Add
-  `"use client"` only to the smallest island that genuinely needs the browser
-  (state, effects, event handlers, the viewer's session or time zone).
+- **Server rendering first** — in `apps/web`, every page is a Server Component
+  and its HTML arrives with the data in it. Events and the current user are
+  always fetched on the server **into the TanStack Query cache** (prefetch +
+  `HydrationBoundary`) and read on the client with `useQuery` using the shared
+  query options in `lib/queries.ts` — never fetched only on the client.
+  `"use client"` goes on the smallest component that needs the browser.
+- **Mutations** — simple forms use Server Actions (`useActionState`);
+  complex interactive forms use TanStack Form + TanStack Query mutations
+  through the `/api` proxy, then invalidate the affected queries.
 
 Before writing code, read the conventions that apply:
 

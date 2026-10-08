@@ -47,17 +47,37 @@ test.describe("event detail page", () => {
         const response = await request.get(`${baseURL}/events/${eventId}`);
 
         expect(response.status()).toBe(200);
-        expect(await response.text()).toContain(name);
+        const html = await response.text();
+        expect(html).toContain(name);
+        // The signed-in owner's session is resolved on the server too.
+        expect(html).toContain(`href="/events/${eventId}/edit"`);
+    });
+
+    test("does not render the owner link in the server HTML for signed-out visitors", async ({
+        playwright,
+        baseURL,
+    }) => {
+        // Explicitly empty: a new context otherwise inherits the project's signed-in storage state.
+        const anonymous = await playwright.request.newContext({ storageState: { cookies: [], origins: [] } });
+        try {
+            const html = await (await anonymous.get(`${baseURL}/events/${eventId}`)).text();
+            expect(html).toContain(name);
+            expect(html).not.toContain(`href="/events/${eventId}/edit"`);
+        } finally {
+            await anonymous.dispose();
+        }
     });
 
     test("hides owner actions from signed-out visitors", async ({ browser, baseURL }) => {
         const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
         const page = await context.newPage();
 
-        const meResponse = page.waitForResponse((r) => r.url().endsWith("/api/auth/me"));
         await page.goto(`${baseURL}/events/${eventId}`);
         await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-        expect((await meResponse).status()).toBe(401);
+        // The HTML is already final because `me` is server-rendered (hydrated as null); "Sign in" shows it is known to be nobody.
+        await expect(
+            page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Sign in" }),
+        ).toBeVisible();
         await expect(page.getByRole("link", { name: "Edit", exact: true })).toBeHidden();
         await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeHidden();
 
