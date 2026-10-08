@@ -9,6 +9,17 @@ export const WEB_ORIGIN = new URL(process.env.WEB_ORIGIN ?? "http://localhost:30
 export const COOKIE_SECURE = new URL(WEB_ORIGIN).protocol === "https:";
 
 /**
+ * Proxies whose X-Forwarded-For we believe (comma-separated addresses/CIDRs):
+ * the dev Next proxy on loopback by default; nginx's address in production.
+ * Trusting nobody makes every visitor share the proxy's IP; trusting everybody
+ * lets anyone spoof the header and dodge rate limits.
+ */
+export const TRUSTED_PROXY = (process.env.TRUSTED_PROXY ?? "127.0.0.1,::1")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+
+/**
  * Development conveniences (the console mailer) need an explicit opt-in:
  * an unset or unknown NODE_ENV is treated like production, so a
  * misconfigured deployment fails closed.

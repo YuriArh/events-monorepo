@@ -1,6 +1,5 @@
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
-import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
@@ -8,7 +7,7 @@ import { ZodError } from "@repo/contracts";
 
 import { ConsoleMailer, type Mailer } from "./lib/mailer.js";
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR } from "./lib/uploads.js";
-import { IS_DEV_OR_TEST, WEB_ORIGIN } from "./lib/config.js";
+import { IS_DEV_OR_TEST, TRUSTED_PROXY, WEB_ORIGIN } from "./lib/config.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { sessionPlugin } from "./plugins/session.js";
 import { eventRoutes } from "./modules/events/event.routes.js";
@@ -40,6 +39,7 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test",
+    trustProxy: TRUSTED_PROXY,
   });
 
   app.decorate("mailer", options.mailer ?? new ConsoleMailer((line) => app.log.info(line)));
@@ -64,13 +64,6 @@ export function buildApp(options: BuildAppOptions = {}) {
     if (origin !== undefined && origin !== WEB_ORIGIN) {
       return reply.status(403).send({ message: "Cross-origin request blocked" });
     }
-  });
-
-  app.register(cors, {
-    origin: WEB_ORIGIN,
-    methods: ["GET", "POST", "PATCH", "DELETE"],
-    // The session cookie only travels on credentialed requests.
-    credentials: true,
   });
 
   app.register(cookie);
