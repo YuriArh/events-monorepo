@@ -16,41 +16,12 @@ import { issuesByField } from "@/lib/form-errors";
 import type { FormState } from "@/lib/form-state";
 import { SESSION_COOKIE, safeNext } from "@/lib/session";
 
+import { apiFailure, post, textFields } from "./shared";
+
 /*
  * Server Actions for the auth forms (used with useActionState). `redirect`
  * throws, so it is never inside a try/catch. Passwords are never echoed back.
  */
-
-/** Text fields of a form submission. */
-const textFields = (formData: FormData) =>
-    Object.fromEntries([...formData.entries()].filter(([, value]) => typeof value === "string")) as Record<
-        string,
-        string
-    >;
-
-/** The API's error, mapped onto the form: 400 issues per field, anything else as the banner. */
-const apiFailure = async (response: Response, values?: Record<string, string>): Promise<FormState> => {
-    const body = await response.json().catch(() => null);
-    return Array.isArray(body?.issues)
-        ? { fieldErrors: issuesByField(body.issues), values }
-        : { formError: body?.message ?? "Something went wrong", values };
-};
-
-/**
- * POSTs to the API. An unreachable API (connection refused, DNS) becomes a
- * 503 the form shows as its banner, instead of the action throwing into
- * Next's error page.
- */
-const post = async (path: string, body: unknown) => {
-    try {
-        return await serverFetch(path, { method: "POST", body: JSON.stringify(body) });
-    } catch (error) {
-        console.error(`POST ${path}: API call failed`, error);
-        return new Response(JSON.stringify({ message: "Something went wrong. Please try again." }), {
-            status: 503,
-        });
-    }
-};
 
 export async function login(_state: FormState, formData: FormData): Promise<FormState> {
     const data = textFields(formData);
