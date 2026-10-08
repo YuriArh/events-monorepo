@@ -1,6 +1,6 @@
 import type { CreateEventInput, UpdateEventInput } from "@repo/contracts";
 
-import { API_URL, request } from "./api";
+import { request } from "./api";
 
 export { ApiError } from "./api";
 
@@ -40,11 +40,6 @@ export type EventRecord = {
     address: Address | null;
 };
 
-export const eventKeys = {
-    all: ["events"] as const,
-    detail: (id: string) => ["events", id] as const,
-};
-
 export const eventsApi = {
     list: () => request<EventRecord[]>("/api/events"),
     get: (id: string) => request<EventRecord>(`/api/events/${id}`),
@@ -66,5 +61,5 @@ export const uploadImage = async (file: File) => {
     return request<{ imageKey: string }>("/api/events/upload", { method: "POST", body });
 };
 
-/** Absolute URL for a stored image key, for use in <img src>. */
-export const imageUrl = (key: string) => `${API_URL}/uploads/${key}`;
+/** Same-origin URL for a stored image key (served through the proxy), for use in <img src>. */
+export const imageUrl = (key: string) => `/uploads/${key}`;

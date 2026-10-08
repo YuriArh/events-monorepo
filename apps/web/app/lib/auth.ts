@@ -11,29 +11,27 @@ import type {
     RegisterInput,
     ResetPasswordInput,
     UpdateProfileInput,
-    UserPublic,
     VerifyEmailInput,
 } from "@repo/contracts";
 
-import { ApiError, request } from "./api";
+import { request } from "./api";
+import { fetchMe, meQuery } from "./queries";
+import type { Me } from "./session";
 
-export type Me = UserPublic;
-
-export const meKey = ["me"] as const;
+/*
+ * Temporary compatibility layer for pages not yet moved to Server Components /
+ * Server Actions (removed in Task 7). New code imports from lib/session.ts,
+ * lib/queries.ts and app/actions directly.
+ */
+export { meKey } from "./queries";
+export { type Me, canModifyEvent, safeNext } from "./session";
 
 const post = <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const authApi = {
     /** Null when signed out — a normal state, not an error. */
-    me: async (): Promise<Me | null> => {
-        try {
-            return (await request<{ user: Me }>("/api/auth/me")).user;
-        } catch (error) {
-            if (error instanceof ApiError && error.status === 401) return null;
-            throw error;
-        }
-    },
+    me: (): Promise<Me | null> => fetchMe(request),
     register: async (input: RegisterInput) => (await post<{ user: Me }>("/api/auth/register", input)).user,
     login: async (input: LoginInput) => (await post<{ user: Me }>("/api/auth/login", input)).user,
     logout: () => post<void>("/api/auth/logout"),
@@ -49,7 +47,7 @@ export const authApi = {
         request<void>("/api/users/me", { method: "DELETE", body: JSON.stringify(input) }),
 };
 
-export const useMe = () => useQuery({ queryKey: meKey, queryFn: authApi.me });
+export const useMe = () => useQuery(meQuery());
 
 /**
  * For pages that need a user: redirects to /login?next=<this page> once we
@@ -69,29 +67,3 @@ export const useRequireUser = () => {
 
     return { me: me ?? null, ready: !isPending && me != null };
 };
-
-/**
- * Only same-site relative paths. Anything else — an absolute URL, a
- * protocol-relative "//host", "/\host", or "/\t/host" (the URL parser strips
- * tab/LF/CR, leaving "//host") — would turn the login page into an open redirect.
- */
-export const safeNext = (next: string | null | undefined) => {
-    if (!next?.startsWith("/")) return "/";
-    // Resolve against a dummy origin the way the browser would; anything that
-    // escapes it (//host, /\host, control-char tricks) is not a same-site path.
-    let resolved: URL;
-    try {
-        resolved = new URL(next, "http://same.invalid");
-    } catch {
-        // "//" and "///" are unparseable; fall back rather than crash the page.
-        return "/";
-    }
-    if (resolved.origin !== "http://same.invalid") return "/";
-    const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
-    // Dot segments ("/.//host") normalise to a protocol-relative path.
-    return path.startsWith("//") || path.startsWith("/\\") ? "/" : path;
-};
-
-/** Mirrors the API's `canModify`. Hides controls; the API is what enforces it. */
-export const canModifyEvent = (me: Me | null | undefined, event: { organizerId: string | null }) =>
-    !!me && (me.role === "ADMIN" || (event.organizerId !== null && event.organizerId === me.id));

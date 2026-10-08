@@ -8,7 +8,8 @@ import { EventForm } from "@/components/event-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { emptyFormValues, resolveImageKey, toEventInput, type EventFormValues } from "@/lib/event-form";
 import { useRequireUser } from "@/lib/auth";
-import { eventKeys, eventsApi, uploadImage } from "@/lib/events";
+import { eventsApi, uploadImage } from "@/lib/events";
+import { eventKeys } from "@/lib/queries";
 import { colors } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

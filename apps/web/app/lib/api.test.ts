@@ -7,23 +7,25 @@ afterEach(() => {
 });
 
 describe("request", () => {
-    // Without this the browser neither sends nor stores the API's session
-    // cookie on a cross-origin fetch, and every user looks signed out.
-    it("sends credentials", async () => {
+    // Same origin through the proxy (Next rewrites or nginx), so the session
+    // cookie rides along without any cross-origin credentials setup.
+    it("calls a relative /api URL in the browser", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+        vi.stubGlobal("fetch", fetchMock);
+        // The vitest environment is node; a `window` global is what marks the browser.
+        vi.stubGlobal("window", {});
+
+        await request("/api/anything");
+
+        expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/anything");
+    });
+
+    it("calls the API directly on the server", async () => {
         const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
         vi.stubGlobal("fetch", fetchMock);
 
         await request("/api/anything");
 
-        expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: "include" });
-    });
-
-    it("cannot be overridden by the caller", async () => {
-        const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
-        vi.stubGlobal("fetch", fetchMock);
-
-        await request("/api/anything", { credentials: "omit" });
-
-        expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: "include" });
+        expect(fetchMock.mock.calls[0]?.[0]).toBe("http://api.test/api/anything");
     });
 });

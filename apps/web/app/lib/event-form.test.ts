@@ -5,7 +5,6 @@ import type { EventRecord } from "./events";
 import {
     emptyFormValues,
     formLevelError,
-    issuesByField,
     resolveImageKey,
     toAddressInput,
     toEventInput,
@@ -324,20 +323,5 @@ describe("formLevelError", () => {
         };
 
         expect(typeof formLevelError(values)).toBe("string");
-    });
-});
-
-describe("issuesByField", () => {
-    it("keys zod issues by their field path", () => {
-        const result = createEventInput.safeParse({ name: "" });
-
-        expect(result.success).toBe(false);
-        if (result.success) return;
-
-        expect(issuesByField(result.error.issues)).toHaveProperty("name");
-    });
-
-    it("puts path-less issues under the form key", () => {
-        expect(issuesByField([{ path: [], message: "bad" }])).toEqual({ form: "bad" });
     });
 });

@@ -13,8 +13,7 @@ import { TextField } from "@/components/text-field";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { authApi, meKey, safeNext } from "@/lib/auth";
-import { issuesByField } from "@/lib/event-form";
-import { uncoveredMessage } from "@/lib/form-errors";
+import { issuesByField, uncoveredMessage } from "@/lib/form-errors";
 
 const FIELDS = new Set(["email", "password"]);
 

@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
+import { logout } from "@/actions/auth";
 import { Button, buttonStyleProps } from "@/components/ui/button";
-import { authApi, useMe } from "@/lib/auth";
+import { meQuery } from "@/lib/queries";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -31,15 +32,8 @@ const styles = stylex.create({
 });
 
 export function SiteHeader() {
-    const { data: me, isPending } = useMe();
-
-    const logout = useMutation({
-        mutationFn: authApi.logout,
-        onSuccess: () => {
-            // Full load: avoids the guarded page's redirect racing this navigation and clears the query cache.
-            window.location.assign("/");
-        },
-    });
+    // Prefetched by the root layout, so this is the visitor from the first render on.
+    const { data: me } = useQuery(meQuery());
 
     return (
         <header {...stylex.props(styles.header)}>
@@ -48,35 +42,30 @@ export function SiteHeader() {
                     Events
                 </Link>
 
-                {/* Render nothing until we know, so signed-in users never see a "Sign in" flash. */}
-                {!isPending && (
-                    <nav aria-label="Account" {...stylex.props(styles.nav)}>
-                        {me ? (
-                            <>
-                                <span {...stylex.props(styles.who, typography.sm)}>{me.name ?? me.email}</span>
-                                <Link href="/account" {...buttonStyleProps("ghost", "sm")}>
-                                    Account
-                                </Link>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={logout.isPending}
-                                    onClick={() => logout.mutate()}>
+                <nav aria-label="Account" {...stylex.props(styles.nav)}>
+                    {me ? (
+                        <>
+                            <span {...stylex.props(styles.who, typography.sm)}>{me.name ?? me.email}</span>
+                            <Link href="/account" {...buttonStyleProps("ghost", "sm")}>
+                                Account
+                            </Link>
+                            <form action={logout}>
+                                <Button type="submit" variant="outline" size="sm">
                                     Sign out
                                 </Button>
-                            </>
-                        ) : (
-                            <>
-                                <Link href="/login" {...buttonStyleProps("ghost", "sm")}>
-                                    Sign in
-                                </Link>
-                                <Link href="/register" {...buttonStyleProps("default", "sm")}>
-                                    Register
-                                </Link>
-                            </>
-                        )}
-                    </nav>
-                )}
+                            </form>
+                        </>
+                    ) : (
+                        <>
+                            <Link href="/login" {...buttonStyleProps("ghost", "sm")}>
+                                Sign in
+                            </Link>
+                            <Link href="/register" {...buttonStyleProps("default", "sm")}>
+                                Register
+                            </Link>
+                        </>
+                    )}
+                </nav>
             </div>
         </header>
     );

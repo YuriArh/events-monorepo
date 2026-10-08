@@ -135,15 +135,3 @@ export const resolveImageKey = async (
 
     return imageKey;
 };
-
-/** Shapes zod issues (from the client parse or a server 400) for field display. */
-export const issuesByField = (issues: Array<{ path: PropertyKey[]; message: string }>) => {
-    const byField: Record<string, string> = {};
-
-    for (const issue of issues) {
-        const key = issue.path.length > 0 ? issue.path.map(String).join(".") : "form";
-        byField[key] ??= issue.message;
-    }
-
-    return byField;
-};

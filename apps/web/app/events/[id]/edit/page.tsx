@@ -10,7 +10,8 @@ import { Spinner } from "@/components/spinner";
 import { Card, CardContent } from "@/components/ui/card";
 import { canModifyEvent, useRequireUser } from "@/lib/auth";
 import { resolveImageKey, toEventInput, toFormValues, type EventFormValues } from "@/lib/event-form";
-import { eventKeys, eventsApi, uploadImage } from "@/lib/events";
+import { eventsApi, uploadImage } from "@/lib/events";
+import { eventKeys } from "@/lib/queries";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

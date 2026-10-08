@@ -13,7 +13,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 import { canModifyEvent, useMe } from "@/lib/auth";
-import { type EventRecord, eventKeys, eventsApi } from "@/lib/events";
+import { type EventRecord, eventsApi } from "@/lib/events";
+import { eventKeys } from "@/lib/queries";
 
 const styles = stylex.create({
     page: {

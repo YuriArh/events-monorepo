@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formLevelError, issuesByField, toEventInput, type EventFormValues } from "@/lib/event-form";
+import { formLevelError, toEventInput, type EventFormValues } from "@/lib/event-form";
+import { issuesByField } from "@/lib/form-errors";
 import { ApiError, imageUrl } from "@/lib/events";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
