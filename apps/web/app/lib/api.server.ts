@@ -24,8 +24,9 @@ export async function serverFetch(path: string, init?: RequestInit) {
 export const serverRequest: Fetcher = async (path, init) => readResponse(await serverFetch(path, init));
 
 /**
- * Re-issues the API's session cookie on the web origin (sign-in, register) or
- * clears it (sign-out, account deletion). Server Actions only — Next can't set
+ * Re-issues the API's session cookie on the web origin (sign-in, register,
+ * renewal) or clears it (sign-out, account deletion); a no-op when the response
+ * has none. Server Actions only (the actions' `send` calls it) — Next can't set
  * cookies while rendering.
  */
 export async function applySessionCookie(response: Response) {

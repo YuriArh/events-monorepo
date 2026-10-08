@@ -46,6 +46,17 @@ describe("updateProfile", () => {
         expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
         expect(state).toEqual({ message: "Saved", values: { name: "" } });
     });
+
+    // The API renews a session at most daily, on whichever request comes first;
+    // a renewal answered to a Server Action must reach the browser too.
+    it("relays a renewed session cookie", async () => {
+        const response = json(200, { user: {} });
+        vi.mocked(serverFetch).mockResolvedValue(response);
+
+        await updateProfile({}, form({ name: "Ann" }));
+
+        expect(applySessionCookie).toHaveBeenCalledWith(response);
+    });
 });
 
 describe("changePassword", () => {
@@ -120,7 +131,7 @@ describe("deleteAccount", () => {
         expect(sentInit()?.method).toBe("DELETE");
         expect(sentBody()).toEqual({ password: "wrong-password" });
         expect(redirect).not.toHaveBeenCalled();
-        expect(applySessionCookie).not.toHaveBeenCalled();
+        expect(cookieStore.delete).not.toHaveBeenCalled();
     });
 
     it("clears the session cookie and redirects home on success", async () => {

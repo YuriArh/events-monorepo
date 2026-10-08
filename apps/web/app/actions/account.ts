@@ -5,7 +5,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { changePasswordInput, deleteAccountInput, updateProfileInput } from "@repo/contracts";
 
-import { applySessionCookie } from "@/lib/api.server";
 import { issuesByField } from "@/lib/form-errors";
 import type { FormState } from "@/lib/form-state";
 import { SESSION_COOKIE } from "@/lib/session";
@@ -55,8 +54,7 @@ export async function logoutAll(_state: FormState, _formData: FormData): Promise
     const response = await post("/api/auth/logout-all");
     if (!response.ok) return apiFailure(response);
 
-    await applySessionCookie(response);
-    // The API cleared it; make sure of it on this origin too.
+    // The API cleared it (relayed by `post`); make sure of it on this origin too.
     (await cookies()).delete(SESSION_COOKIE);
     redirect("/login");
 }
@@ -68,7 +66,6 @@ export async function deleteAccount(_state: FormState, formData: FormData): Prom
     const response = await send("DELETE", "/api/users/me", parsed.data);
     if (!response.ok) return apiFailure(response);
 
-    await applySessionCookie(response);
     (await cookies()).delete(SESSION_COOKIE);
     redirect("/");
 }

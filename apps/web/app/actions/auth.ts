@@ -11,7 +11,6 @@ import {
     verifyEmailInput,
 } from "@repo/contracts";
 
-import { applySessionCookie, serverFetch } from "@/lib/api.server";
 import { issuesByField } from "@/lib/form-errors";
 import type { FormState } from "@/lib/form-state";
 import { SESSION_COOKIE, safeNext } from "@/lib/session";
@@ -33,7 +32,6 @@ export async function login(_state: FormState, formData: FormData): Promise<Form
     // 401 carries the deliberately vague "Invalid email or password".
     if (!response.ok) return apiFailure(response, values);
 
-    await applySessionCookie(response);
     // Replace: Back shouldn't return to the sign-in form.
     redirect(safeNext(data.next), RedirectType.replace);
 }
@@ -53,7 +51,6 @@ export async function register(_state: FormState, formData: FormData): Promise<F
     if (response.status === 409) return { fieldErrors: { email: "Email already registered" }, values };
     if (!response.ok) return apiFailure(response, values);
 
-    await applySessionCookie(response);
     redirect("/", RedirectType.replace);
 }
 
@@ -94,16 +91,9 @@ export async function verifyEmail(_state: FormState, formData: FormData): Promis
 }
 
 export async function logout() {
-    try {
-        const response = await serverFetch("/api/auth/logout", { method: "POST" });
-        await applySessionCookie(response);
-    } catch (error) {
-        // The API is unreachable: its session row outlives this, but the visitor
-        // is still signed out here — dropping the cookie below is what matters.
-        console.error("logout: API call failed", error);
-    }
-    // Always, whatever the API said: signed out on this origin.
+    // Whatever the API answers — even when it is unreachable and its session
+    // row outlives this — the visitor is signed out on this origin.
+    await post("/api/auth/logout");
     (await cookies()).delete(SESSION_COOKIE);
-    // Outside the try: redirect works by throwing.
     redirect("/");
 }

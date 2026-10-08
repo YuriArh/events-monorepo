@@ -73,8 +73,8 @@ of scope (the project has no deployment yet) — only the documented config.
   wrap the same core and add the incoming `sid` cookie (`cookies()`) and the
   client's `X-Forwarded-For` (`headers()`); `applySessionCookie(response)`
   copies the API's `Set-Cookie` for `sid` onto the outgoing response with
-  `cookies().set` / `.delete` — used by sign-in, register, sign-out and
-  account deletion.
+  `cookies().set` / `.delete` — called by the Server Actions' shared `send`
+  for every real API answer (sign-in, sign-out, and any renewal).
 
 ### Query layer — `lib/queries.ts` (isomorphic)
 
@@ -159,8 +159,9 @@ export type FormState = {
 
 Each action: `contract.safeParse(Object.fromEntries(formData))` → on failure
 `{ fieldErrors: issuesByField(issues), values }` → `serverFetch` to the API →
-map 400 issues with `issuesByField`, 401/409/429 to `formError` → on success
-`applySessionCookie` where relevant, then `redirect(...)` or
+`applySessionCookie` on every API answer (in the shared `send`) → map 400
+issues with `issuesByField`, 401/409/429 to `formError` → on success
+`redirect(...)` or
 `revalidatePath("/", "layout")` + `{ message }`.
 
 - `login(next)` → `redirect(safeNext(next))`; `register` → `redirect("/")`
@@ -205,7 +206,7 @@ API's own Origin check still guards `/api` writes through the proxy.
 ## Known limitations
 
 - **Session renewal** happens on browser `/api` calls (the proxy relays the
-  API's `Set-Cookie`), not during server rendering — Next can't set cookies
+  API's `Set-Cookie`) and Server Actions (`send` relays it), not during server rendering — Next can't set cookies
   while rendering. The `me` query refetches in the browser after `staleTime`,
   which keeps an active session renewed.
 - Two mutation styles exist by design (Server Actions for simple forms,

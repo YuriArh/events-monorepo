@@ -38,18 +38,22 @@ describe("logout", () => {
     // Signing out must work on this origin even when the API is unreachable.
     it("clears the session cookie and redirects even if the API call fails", async () => {
         vi.mocked(serverFetch).mockRejectedValue(new TypeError("fetch failed"));
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
         await expect(logout()).rejects.toThrow("NEXT_REDIRECT");
+        consoleError.mockRestore();
 
         expect(cookieStore.delete).toHaveBeenCalledWith("sid");
         expect(redirect).toHaveBeenCalledWith("/");
     });
 
     it("clears the session cookie and redirects after a normal sign-out", async () => {
-        vi.mocked(serverFetch).mockResolvedValue(new Response(null, { status: 204 }));
+        const response = new Response(null, { status: 204 });
+        vi.mocked(serverFetch).mockResolvedValue(response);
 
         await expect(logout()).rejects.toThrow("NEXT_REDIRECT");
 
+        expect(applySessionCookie).toHaveBeenCalledWith(response);
         expect(cookieStore.delete).toHaveBeenCalledWith("sid");
         expect(redirect).toHaveBeenCalledWith("/");
     });
@@ -189,6 +193,16 @@ describe("resetPassword", () => {
         const state = await resetPassword({}, form({ token: "t", newPassword: "long-enough" }));
 
         expect(state).toEqual({ formError: "This link has expired" });
+    });
+
+    // Every real API answer may carry Set-Cookie (renewal, or clearing a revoked session).
+    it("relays the API's cookie on a refusal too", async () => {
+        const response = json(400, { message: "This link has expired" });
+        vi.mocked(serverFetch).mockResolvedValue(response);
+
+        await resetPassword({}, form({ token: "t", newPassword: "long-enough" }));
+
+        expect(applySessionCookie).toHaveBeenCalledWith(response);
     });
 
     it("confirms and refreshes the signed-in state (sessions were revoked)", async () => {

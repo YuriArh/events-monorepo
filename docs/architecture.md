@@ -100,8 +100,12 @@ complex, interactive event form keeps TanStack Form and TanStack Query
 mutations through `/api`.
 
 **Cookies are set only in Server Actions** (and Route Handlers), never while
-rendering: the action relays the API's `Set-Cookie` with `cookies().set/delete`
-(`applySessionCookie`, `lib/set-cookie.ts`).
+rendering. Every Server Action calls the API through `send`/`post`
+(`app/actions/shared.ts`), which relays the `Set-Cookie` of every API answer
+with `cookies().set/delete` (`applySessionCookie`, `lib/set-cookie.ts`): sign-in
+sets it, sign-out clears it, and any action can carry a renewal. Actions that
+must end a session regardless (sign-out, sign-out everywhere, account
+deletion) also delete `sid` themselves.
 
 **Renewal limitation.** The API renews a session at most once a day by sending
 a fresh `Set-Cookie`. A Server Component render cannot set cookies, so a
