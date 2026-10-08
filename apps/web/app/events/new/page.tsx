@@ -1,15 +1,9 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { EventForm } from "@/components/event-form";
-import { Card, CardContent } from "@/components/ui/card";
-import { emptyFormValues, resolveImageKey, toEventInput, type EventFormValues } from "@/lib/event-form";
-import { useRequireUser } from "@/lib/auth";
-import { eventsApi, uploadImage } from "@/lib/events";
-import { eventKeys } from "@/lib/queries";
+import { Card, CardContent } from "@/components/card";
+import { NewEventForm } from "@/components/new-event-form";
+import { getMe } from "@/lib/session.server";
 import { colors } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -27,22 +21,8 @@ const styles = stylex.create({
     header: { marginBottom: "1.75rem" },
 });
 
-export default function NewEventPage() {
-    const router = useRouter();
-    const { ready } = useRequireUser();
-    const queryClient = useQueryClient();
-
-    const createEvent = useMutation({
-        mutationFn: async (values: EventFormValues) => {
-            const imageKey = await resolveImageKey(values, uploadImage);
-
-            return eventsApi.create(toEventInput(values, { imageKey }));
-        },
-        onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: eventKeys.all });
-            router.push("/");
-        },
-    });
+export default async function NewEventPage() {
+    if (!(await getMe())) redirect(`/login?next=${encodeURIComponent("/events/new")}`);
 
     return (
         <div {...stylex.props(styles.page)}>
@@ -53,16 +33,7 @@ export default function NewEventPage() {
 
                 <Card>
                     <CardContent>
-                        {ready && (
-                            <EventForm
-                                initialValues={emptyFormValues()}
-                                submitLabel="Create"
-                                onCancel={() => router.push("/")}
-                                onSubmit={async (values) => {
-                                    await createEvent.mutateAsync(values);
-                                }}
-                            />
-                        )}
+                        <NewEventForm />
                     </CardContent>
                 </Card>
             </main>

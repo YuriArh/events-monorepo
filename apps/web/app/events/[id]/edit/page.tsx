@@ -1,17 +1,14 @@
-"use client";
-
-import { use } from "react";
-import { useRouter } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 
-import { EventForm } from "@/components/event-form";
-import { Spinner } from "@/components/spinner";
-import { Card, CardContent } from "@/components/ui/card";
-import { canModifyEvent, useRequireUser } from "@/lib/auth";
-import { resolveImageKey, toEventInput, toFormValues, type EventFormValues } from "@/lib/event-form";
-import { eventsApi, uploadImage } from "@/lib/events";
-import { eventKeys } from "@/lib/queries";
+import { Card, CardContent } from "@/components/card";
+import { EditEventForm } from "@/components/edit-event-form";
+import { serverRequest } from "@/lib/api.server";
+import { eventQueries } from "@/lib/queries";
+import { getServerQueryClient } from "@/lib/query-client.server";
+import { canModifyEvent } from "@/lib/session";
+import { getMe } from "@/lib/session.server";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -31,38 +28,19 @@ const styles = stylex.create({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: "0.5rem",
         paddingBlock: "5rem",
         color: colors.mutedForeground,
     },
 });
 
-export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
-    const router = useRouter();
-    const { me, ready } = useRequireUser();
-    const queryClient = useQueryClient();
+export default async function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const me = await getMe();
+    if (!me) redirect(`/login?next=${encodeURIComponent(`/events/${id}/edit`)}`);
 
-    const { data: event, isPending, error } = useQuery({
-        queryKey: eventKeys.detail(id),
-        queryFn: () => eventsApi.get(id),
-        enabled: ready,
-    });
-
-    const updateEvent = useMutation({
-        mutationFn: async (values: EventFormValues) => {
-            const imageKey = await resolveImageKey(values, uploadImage);
-
-            return eventsApi.update(id, toEventInput(values, { imageKey }));
-        },
-        onSuccess: async () => {
-            // eventKeys.all (["events"]) is a prefix of eventKeys.detail(id)
-            // (["events", id]), so invalidating "all" already invalidates this
-            // detail query too.
-            await queryClient.invalidateQueries({ queryKey: eventKeys.all });
-            router.push("/");
-        },
-    });
+    const queryClient = getServerQueryClient();
+    const event = await queryClient.fetchQuery(eventQueries.detail(id, serverRequest));
+    if (!event) notFound();
 
     return (
         <div {...stylex.props(styles.page)}>
@@ -73,28 +51,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
                 <Card>
                     <CardContent>
-                        {!ready || isPending ? (
-                            <div {...stylex.props(styles.state, typography.sm)}>
-                                <Spinner size={16} />
-                                Loading…
-                            </div>
-                        ) : error || !event ? (
-                            <div {...stylex.props(styles.state, typography.sm)}>
-                                {error instanceof Error ? error.message : "Event not found"}
-                            </div>
-                        ) : !canModifyEvent(me, event) ? (
-                            <div {...stylex.props(styles.state, typography.sm)}>
-                                Only the organizer can edit this event.
-                            </div>
+                        {canModifyEvent(me, event) ? (
+                            <HydrationBoundary state={dehydrate(queryClient)}>
+                                <EditEventForm id={id} />
+                            </HydrationBoundary>
                         ) : (
-                            <EventForm
-                                initialValues={toFormValues(event)}
-                                submitLabel="Save"
-                                onCancel={() => router.push("/")}
-                                onSubmit={async (values) => {
-                                    await updateEvent.mutateAsync(values);
-                                }}
-                            />
+                            <div {...stylex.props(styles.state, typography.sm)}>
+                                Only the organizer or an admin can edit this event.
+                            </div>
                         )}
                     </CardContent>
                 </Card>
