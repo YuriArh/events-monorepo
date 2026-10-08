@@ -78,9 +78,14 @@ Query cache**, and read on the client with `useQuery`:
   the client `useQuery` use the same key and function.
 - A page gets the per-request server client with `getServerQueryClient()`
   (`lib/query-client.server.ts`: React `cache`, no retry, `staleTime > 0`),
-  `prefetchQuery`s with `serverRequest`, and renders its client component inside
-  `<HydrationBoundary state={dehydrate(queryClient)}>`. The browser uses the
-  singleton from `lib/query-client.ts`.
+  fills it with `prefetch(queryClient, options)` (same file:
+  `queryClient.query(options)` with errors swallowed, so the client's
+  `useQuery` shows them) or awaits `queryClient.query(options)` when it needs
+  the data itself, passing `serverRequest` as the fetcher, and renders its
+  client component inside `<HydrationBoundary state={dehydrate(queryClient)}>`.
+  The browser uses the singleton from `lib/query-client.ts`. Use
+  `queryClient.query`: the older fetch/prefetch/ensure methods are deprecated
+  in the installed TanStack Query.
 - The current user is `getMe()` (`lib/session.server.ts`), deduplicated with
   the layout's prefetch; pages use it to redirect or `notFound()` before any
   HTML is sent. Pure helpers (`safeNext`, `canModifyEvent`) live in

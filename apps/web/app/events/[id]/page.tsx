@@ -12,7 +12,7 @@ type Props = { params: Promise<{ id: string }> };
 
 const DESCRIPTION_LIMIT = 160;
 
-const loadEvent = (id: string) => getServerQueryClient().fetchQuery(eventQueries.detail(id, serverRequest));
+const loadEvent = (id: string) => getServerQueryClient().query(eventQueries.detail(id, serverRequest));
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const event = await loadEvent((await params).id);

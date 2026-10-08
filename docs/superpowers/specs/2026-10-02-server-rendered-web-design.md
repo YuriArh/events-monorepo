@@ -108,8 +108,9 @@ anywhere sets `me` to `null`; 401s aren't retried.
 
 ```tsx
 // a server page
-const queryClient = getQueryClient();
-await queryClient.prefetchQuery(eventQueries.list(serverRequest));
+const queryClient = getServerQueryClient();
+// queryClient.query(options), errors swallowed: the client's useQuery shows them.
+await prefetch(queryClient, eventQueries.list(serverRequest));
 return (
     <HydrationBoundary state={dehydrate(queryClient)}>
         <EventList /> {/* "use client"; useQuery(eventQueries.list()) */}
@@ -119,7 +120,7 @@ return (
 
 - The **root layout** prefetches `meQuery` for every page; the header and all
   ownership checks read `me` from the cache.
-- `getMe()` (server) = `getQueryClient().fetchQuery(meQuery(serverRequest))` —
+- `getMe()` (server) = `getServerQueryClient().query(meQuery(serverRequest))` —
   deduplicated with the layout's prefetch. Used by guards.
 - After a Server Action redirects or revalidates, Next re-renders the layout;
   its newer `me` hydrates over the client cache, so sign-in/out and profile
@@ -131,7 +132,7 @@ return (
 | --- | --- | --- |
 | layout | prefetch `me`, `metadataBase` from `SITE_URL` | `SiteHeader` (`useQuery(meQuery())`); Sign out = `<form action={logout}>` |
 | `/` | prefetch list | `EventList` — table, owner Edit/Delete via `canModifyEvent(me)`, `DeleteEventDialog` |
-| `/events/[id]` | `fetchQuery(detail)`; `null` → `notFound()` (real 404); `generateMetadata` from the same cached query | `EventDetail` — today's markup, `LocalDateTime`, owner actions |
+| `/events/[id]` | `queryClient.query(detail)`; `null` → `notFound()` (real 404); `generateMetadata` from the same cached query | `EventDetail` — today's markup, `LocalDateTime`, owner actions |
 | `/events/new` | guard (`getMe()` → `redirect("/login?next=/events/new")`) | `NewEventForm` — TanStack Form + `useMutation` (upload via `/api/events/upload`, create via `/api/events`), invalidate `eventKeys.all`, `router.push` |
 | `/events/[id]/edit` | guard; prefetch detail; `notFound()`; not the organizer/admin → "Only the organizer…" rendered on the server | `EditEventForm` — `useQuery(detail)` + `useMutation` |
 | `/login`, `/register` | page; `next` read from `searchParams` and passed down (no `useSearchParams`/Suspense) | form with `useActionState(login \| register)` |

@@ -5,7 +5,7 @@ import "./globals.css";
 import { SiteHeader } from "./components/site-header";
 import { serverRequest } from "./lib/api.server";
 import { meQuery } from "./lib/queries";
-import { getServerQueryClient } from "./lib/query-client.server";
+import { getServerQueryClient, prefetch } from "./lib/query-client.server";
 import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -23,7 +23,7 @@ export default async function RootLayout({
 }>) {
   // Every page needs `me` (header, ownership); fetch it once, here, into the cache.
   const queryClient = getServerQueryClient();
-  await queryClient.prefetchQuery(meQuery(serverRequest));
+  await prefetch(queryClient, meQuery(serverRequest));
 
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>

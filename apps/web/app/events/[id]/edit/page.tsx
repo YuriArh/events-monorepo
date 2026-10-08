@@ -39,7 +39,7 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
     if (!me) redirect(`/login?next=${encodeURIComponent(`/events/${id}/edit`)}`);
 
     const queryClient = getServerQueryClient();
-    const event = await queryClient.fetchQuery(eventQueries.detail(id, serverRequest));
+    const event = await queryClient.query(eventQueries.detail(id, serverRequest));
     if (!event) notFound();
 
     return (
