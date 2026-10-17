@@ -11,6 +11,7 @@ import {
   resolveUploadPath,
   UnsupportedImageTypeError,
 } from "../../lib/uploads.js";
+import { rateLimits } from "../../lib/rate-limits.js";
 import { currentUser, requireAuth } from "../../plugins/session.js";
 import {
   createEventSchema,
@@ -96,7 +97,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
 
   // Uploads are their own endpoint so creating an event stays a plain JSON
   // request; the client uploads first and submits the returned key.
-  app.post("/upload", { preHandler: requireAuth }, async (request, reply) => {
+  app.post("/upload", { preHandler: requireAuth, config: { rateLimit: rateLimits.upload } }, async (request, reply) => {
     const file = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
 
     if (!file) {

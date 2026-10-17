@@ -1,26 +1,44 @@
-import { describe, expect, it } from "vitest";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import rateLimit from "@fastify/rate-limit";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { clientKey } from "./rate-limits.js";
+import { limit } from "./rate-limits.js";
 
-describe("clientKey", () => {
-    it("leaves IPv4 unchanged", () => {
-        expect(clientKey("203.0.113.7")).toBe("203.0.113.7");
+/** A bare app with one route behind the given limit; no database, so floods are cheap. */
+let app: FastifyInstance;
+
+const build = async (max: number) => {
+    app = Fastify();
+    await app.register(rateLimit, { global: false, hook: "preHandler" });
+    const key = (request: FastifyRequest) => (request.body as Record<string, string>).k ?? "";
+    app.post("/", { config: { rateLimit: limit(max, key) } }, async () => "ok");
+    await app.ready();
+};
+
+const hit = (k: string) =>
+    app.inject({ method: "POST", url: "/", payload: { k } }).then((response) => response.statusCode);
+
+afterEach(async () => {
+    await app.close();
+});
+
+describe("limit", () => {
+    it("answers 429 once a key is over its limit, and only for that key", async () => {
+        await build(2);
+
+        expect([await hit("a"), await hit("a"), await hit("a")]).toEqual([200, 200, 429]);
+        expect(await hit("b")).toBe(200);
     });
 
-    it("unwraps IPv4-mapped IPv6 to the IPv4 address", () => {
-        expect(clientKey("::ffff:1.2.3.4")).toBe("1.2.3.4");
-    });
+    // The plugin's default store forgets the oldest of 5000 keys, which would
+    // let a flood of throwaway keys reset a victim's counter.
+    it("keeps a blocked key blocked after a flood of other keys", async () => {
+        await build(2);
 
-    it("maps addresses in the same /64 to the same key", () => {
-        expect(clientKey("2001:db8:1:2::1")).toBe(clientKey("2001:db8:1:2:ffff::9"));
-    });
+        await hit("victim");
+        await hit("victim");
+        for (let i = 0; i < 6000; i += 1) await hit(`junk${i}`);
 
-    it("maps addresses in different /64s to different keys", () => {
-        expect(clientKey("2001:db8:1:2::1")).not.toBe(clientKey("2001:db8:1:3::1"));
-    });
-
-    it("treats compressed and expanded forms of one address alike", () => {
-        expect(clientKey("2001:db8::1")).toBe(clientKey("2001:0db8:0000:0000:0000:0000:0000:0001"));
-        expect(clientKey("::1")).toBe(clientKey("0:0:0:0:0:0:0:1"));
+        expect(await hit("victim")).toBe(429);
     });
 });

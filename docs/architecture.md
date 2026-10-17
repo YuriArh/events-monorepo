@@ -199,44 +199,20 @@ before geocoding existed have none of them.
 
 ## Authentication
 
-Self-built, email + password. Full design: `docs/superpowers/specs/2026-10-01-auth-design.md`.
+Self-built, email + password, server-side sessions in Postgres behind an
+`HttpOnly` `sid` cookie. How it works — sessions, flows, guards, ownership,
+CSRF, rate limits, the cookie relay in Server Actions — is in
+[authentication.md](authentication.md); the original design is
+`docs/superpowers/specs/2026-10-01-auth-design.md`. In short:
 
-- **Sessions** live in Postgres. The `sid` cookie (`HttpOnly`, `SameSite=Lax`,
-  `Secure` whenever `WEB_ORIGIN` is `https:` — `COOKIE_SECURE` in
-  `lib/config.ts`, deliberately not tied to `NODE_ENV`) carries a random
-  32-byte token; `Session.tokenHash` stores only its sha256. 30-day lifetime, renewed at most once a day.
-- **`plugins/session.ts`** resolves the cookie on every request into
-  `request.user` (a `PublicUser`, never containing `passwordHash`).
-  `requireAuth` -> 401, `requireRole` -> 403. Handlers behind `requireAuth` read
-  the user with `currentUser(request)`.
+- `plugins/session.ts` resolves the cookie into `request.user`;
+  `requireAuth` -> 401, `requireRole` -> 403, `currentUser(request)` inside.
 - **Authorization** is in services, not routes: `canModify` in
   `event.service.ts` allows the organizer or an admin.
-- **One-shot tokens** (`AuthToken`: password reset, email verification) are
-  hashed the same way and redeemed with a conditional `updateMany`, which is
-  what makes them single-use under concurrency.
 - **Mail** goes through the `Mailer` interface (`lib/mailer.ts`): logged to
   the console in development, captured in memory in tests. There is no real
-  provider yet. The console fallback fails closed: `buildApp` throws when no
-  `Mailer` is injected unless `NODE_ENV` is exactly `development` or `test`
-  (unset counts as production).
-- **No account-existence leak**: `POST /api/auth/password/forgot` replies 204
-  immediately and runs the reset work fire-and-forget (failures are logged by
-  error name only), so neither timing nor mailer errors reveal whether an
-  account exists. Registration creates the user and session first, then sends
-  the verification email best-effort: a mail failure doesn't fail it.
-- **CSRF**: `SameSite=Lax` plus an `Origin` check on POST/PATCH/PUT/DELETE. A
-  request whose `Origin` header is present and differs from `WEB_ORIGIN` is
-  rejected (403); requests with no `Origin` (curl, server-to-server, tests)
-  pass. `WEB_ORIGIN` is normalized with `new URL(...).origin`.
-- **Rate limits** (`lib/rate-limits.ts`) are in memory, per process, and run
-  at `preHandler` so keys can use the body or `request.user`. They cover
-  register, login, password forgot/reset, email verify/resend, password change
-  and `DELETE /api/users/me` (password re-check). Login keys on
-  `clientKey(ip)` plus the email, and the signed-in routes key on the user
-  with `clientKey(ip)` as the fallback; `clientKey` groups IPv6 addresses by
-  /64. The IP-only routes use the plugin's default key, which also groups IPv6
-  by /64. Behind a reverse proxy, configure Fastify's `trustProxy`, or every
-  client shares one IP bucket.
+  provider yet; `buildApp` throws without one unless `NODE_ENV` is exactly
+  `development` or `test`.
 - **Event images**: the service rejects (409) an `imageKey` that another event
   already uses, so one user can't make the server delete another user's
   uploaded file. An uploaded file not yet attached to an event has no owner.

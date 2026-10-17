@@ -29,7 +29,10 @@ describe("rate limiting", () => {
             expect((await attempt()).statusCode).toBe(401);
         }
 
-        expect((await attempt()).statusCode).toBe(429);
+        const blocked = await attempt();
+        expect(blocked.statusCode).toBe(429);
+        expect(blocked.json()).toEqual({ message: "Too many attempts. Please try again later." });
+        expect(blocked.headers["retry-after"]).toBeDefined();
 
         const variant = await app.inject({
             method: "POST",
@@ -44,6 +47,42 @@ describe("rate limiting", () => {
             payload: { email: "someone-else@example.test", password: "guess" },
         });
         expect(other.statusCode).toBe(401);
+    });
+
+    it("limits password-reset mail per email, whatever the address", async () => {
+        const forgot = (remoteAddress: string) =>
+            app.inject({
+                method: "POST",
+                url: "/api/auth/password/forgot",
+                remoteAddress,
+                payload: { email: "inbox@example.test" },
+            });
+
+        for (let i = 0; i < 3; i += 1) {
+            expect((await forgot(`192.0.2.${i + 1}`)).statusCode).toBe(204);
+        }
+
+        expect((await forgot("192.0.2.99")).statusCode).toBe(429);
+    });
+
+    it("limits image uploads per user", async () => {
+        const { cookie } = await signUp(app);
+        // Rejected as 415 by the handler, so nothing is written, but still counted.
+        const upload = () =>
+            app.inject({
+                method: "POST",
+                url: "/api/events/upload",
+                headers: { "content-type": "multipart/form-data; boundary=x", cookie },
+                payload:
+                    '--x\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\n' +
+                    "Content-Type: text/plain\r\n\r\nhi\r\n--x--\r\n",
+            });
+
+        for (let i = 0; i < 20; i += 1) {
+            expect((await upload()).statusCode).toBe(415);
+        }
+
+        expect((await upload()).statusCode).toBe(429);
     });
 });
 
