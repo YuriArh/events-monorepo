@@ -2,11 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 
-import { EventDetail } from "@/components/event-detail";
-import { serverRequest } from "@/lib/api.server";
-import { imageUrl } from "@/lib/events";
-import { eventQueries } from "@/lib/queries";
-import { getServerQueryClient } from "@/lib/query-client.server";
+import { EventDetail, eventQueries, imageUrl } from "@/modules/events";
+import { serverRequest } from "@/shared/api/request.server";
+import { getServerQueryClient } from "@/shared/query/query-client.server";
 
 type Props = { params: Promise<{ id: string }> };
 

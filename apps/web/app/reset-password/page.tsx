@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-import { ResetPasswordForm } from "@/components/auth-forms";
-import { AuthPage } from "@/components/auth-page";
+import { AuthPage, ResetPasswordForm } from "@/modules/auth";
 
 type Props = { searchParams: Promise<{ token?: string | string[] }> };
 

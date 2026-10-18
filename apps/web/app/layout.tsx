@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 import "./globals.css";
-import { SiteHeader } from "./components/site-header";
-import { serverRequest } from "./lib/api.server";
-import { meQuery } from "./lib/queries";
-import { getServerQueryClient, prefetch } from "./lib/query-client.server";
+import { meQuery, SiteHeader } from "@/modules/auth";
+import { serverRequest } from "@/shared/api/request.server";
+import { getServerQueryClient, prefetch } from "@/shared/query/query-client.server";
 import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });

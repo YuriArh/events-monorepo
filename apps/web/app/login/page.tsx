@@ -1,8 +1,6 @@
 import Link from "next/link";
 
-import { LoginForm } from "@/components/auth-forms";
-import { AuthPage } from "@/components/auth-page";
-import { safeNext } from "@/lib/session";
+import { AuthPage, LoginForm, safeNext } from "@/modules/auth";
 
 type Props = { searchParams: Promise<{ next?: string | string[] }> };
 

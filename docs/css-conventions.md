@@ -90,7 +90,7 @@ The registry's `date-picker` entry (`https://stylexui.dev/r/date-picker.json`)
 lists real dependencies (`calendar.tsx`, `button.tsx`, tokens, utils) but its
 `files` array never includes a `date-picker.tsx` — pulling it creates nothing.
 Ours is hand-composed instead, from the vendored `Popover` + `Calendar` plus a
-plain time `Input`, in `apps/web/app/components/date-time-picker.tsx`. That
+plain time `Input`, in `apps/web/app/shared/ui/date-time-picker.tsx`. That
 file is regular app code, not registry output — unlike `app/components/ui/**`,
 which stays vendored and is regenerated rather than hand-edited.
 

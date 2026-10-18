@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-import { ForgotPasswordForm } from "@/components/auth-forms";
-import { AuthPage } from "@/components/auth-page";
+import { AuthPage, ForgotPasswordForm } from "@/modules/auth";
 
 export default function ForgotPasswordPage() {
     return (

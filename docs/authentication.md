@@ -25,9 +25,9 @@ OAuth, no third-party auth library.
 | Event permissions (`canModify`) | `apps/api/src/modules/events/event.service.ts` |
 | Input schemas (email, password rules, tokens) | `packages/contracts/src/index.ts` |
 | Tables `User`, `Session`, `AuthToken` | `packages/db/prisma/schema.prisma` |
-| Server-side API calls carrying the visitor's cookie; cookie relay | `apps/web/app/lib/api.server.ts`, `apps/web/app/lib/set-cookie.ts` |
-| `getMe()`, `meQuery`, `safeNext`, `canModifyEvent` | `apps/web/app/lib/session.server.ts`, `lib/queries.ts`, `lib/session.ts` |
-| Auth and account Server Actions | `apps/web/app/actions/{auth,account,shared}.ts` |
+| Server-side API calls carrying the visitor's cookie; cookie relay | `apps/web/app/shared/api/request.server.ts`, `apps/web/app/shared/api/session-cookie.ts` |
+| `getMe()`, `meQuery`, `safeNext`, `canModifyEvent` | `apps/web/app/modules/auth/{model/session.server,model/queries,lib/session}.ts` |
+| Auth and account Server Actions | `apps/web/app/modules/{auth/auth,account/account}.actions.ts`, `apps/web/app/shared/api/server-action.ts` |
 
 ## Data model
 
@@ -243,7 +243,7 @@ deleted the account) are admin-only.
 
 The web app never decides access; it only hides what the API would refuse.
 
-- `getMe()` (`lib/session.server.ts`) reads the current user on the server
+- `getMe()` (`modules/auth/model/session.server.ts`) reads the current user on the server
   into the TanStack Query cache (`meQuery`, deduplicated with the root
   layout's prefetch). Pages that need a session redirect before any HTML is
   sent:
@@ -255,7 +255,7 @@ The web app never decides access; it only hides what the API would refuse.
   Protected pages: `/account`, `/events/new`, `/events/[id]/edit` (the last
   renders "Only the organizer or an admin can edit this event." instead of
   the form when `canModifyEvent` is false).
-- `canModifyEvent` (`lib/session.ts`) mirrors the API's `canModify` to show or
+- `canModifyEvent` (`modules/auth/lib/session.ts`) mirrors the API's `canModify` to show or
   hide edit/delete controls. If the two ever disagree, the API wins.
 - `safeNext` turns the `next` parameter of `/login` into a same-site path
   only (blocks `//host`, `/\host`, control-character tricks), so sign-in
@@ -277,18 +277,18 @@ browser ── page / Server Action ──▶ Next server
                                       └─ serverFetch(): Cookie: sid=… + X-Forwarded-For ──▶ Fastify
 ```
 
-**Browser path.** `request()` (`lib/api.ts`) uses relative URLs; the cookie
+**Browser path.** `request()` (`shared/api/request.ts`) uses relative URLs; the cookie
 goes along by itself, and the API's `Set-Cookie` comes straight back through
 the proxy. Used by the event form's TanStack mutations and client refetches.
 
-**Server path.** `serverFetch` (`lib/api.server.ts`) copies the visitor's
+**Server path.** `serverFetch` (`shared/api/request.server.ts`) copies the visitor's
 `sid` and `X-Forwarded-For` onto a request to `API_INTERNAL_URL`. Two cases:
 
 - **Server Components** (rendering) can't set cookies. A renewal `Set-Cookie`
   produced by a render-time fetch is dropped; it is delivered later by the
   next browser `/api` call or Server Action.
 - **Server Actions** call the API through `send`/`post`
-  (`app/actions/shared.ts`), which runs `applySessionCookie` on every
+  (`shared/api/server-action.ts`), which runs `applySessionCookie` on every
   response: it parses the API's `sid` `Set-Cookie` and re-issues it on the web
   origin with the same flags (or deletes it when the API cleared it). Sign-out,
   sign-out everywhere and account deletion also delete `sid` themselves, so
@@ -415,7 +415,7 @@ controls with a helper that mirrors the API rule; never rely on it.
 
 **A new form that changes the session** (or may receive a renewal): make it a
 Server Action that calls the API through `post`/`send` from
-`app/actions/shared.ts`, so the API's `Set-Cookie` is relayed to the browser.
+`shared/api/server-action.ts`, so the API's `Set-Cookie` is relayed to the browser.
 
 ## Tests
 
@@ -423,7 +423,7 @@ Server Action that calls the API through `post`/`send` from
   `event.routes.test.ts` (ownership), `app.security.test.ts` (Origin check,
   rate limits, forwarded IP), `password.test.ts`, `crypto.test.ts`,
   `rate-limits.test.ts` (eviction flood). Helpers in `apps/api/src/test/auth.ts`.
-- Web: `actions/auth.test.ts`, `actions/account.test.ts`, `lib/session.test.ts`
-  (`safeNext`, `canModifyEvent`), `lib/set-cookie.test.ts`.
+- Web: `modules/auth/model/actions.test.ts`, `modules/account/model/actions.test.ts`, `modules/auth/lib/session.test.ts`
+  (`safeNext`, `canModifyEvent`), `shared/api/session-cookie.test.ts`.
 - E2E: `apps/e2e/tests/auth.spec.ts`, `account.spec.ts`; the signed-in state
   is prepared once in `auth.setup.ts`.
