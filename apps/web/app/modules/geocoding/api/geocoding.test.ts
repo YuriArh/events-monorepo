@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { emptyStateMessage, geocodeApi, geocodeKeys, MIN_QUERY_LENGTH } from "./geocoding.api";
+import { emptyStateMessage, geocodeApi, geocodeKeys, MIN_QUERY_LENGTH } from "./geocoding";
 
 const fetchMock = vi.fn();
 

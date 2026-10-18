@@ -1,7 +1,7 @@
 import type { CreateAddressInput, CreateEventInput } from "@repo/contracts";
 
-import type { EventRecord } from "./events.api";
-import type { AddressSelection } from "@/modules/geocoding/geocoding.api";
+import type { EventRecord } from "../api/events";
+import type { AddressSelection } from "@/modules/geocoding";
 
 export type EventFormValues = {
     name: string;

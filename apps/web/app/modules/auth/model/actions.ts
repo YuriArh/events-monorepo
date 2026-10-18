@@ -14,7 +14,7 @@ import {
 import { issuesByField } from "@/shared/forms/form-errors";
 import type { FormState } from "@/shared/forms/form-state";
 import { SESSION_COOKIE } from "@/shared/api/session-cookie";
-import { safeNext } from "./session";
+import { safeNext } from "../lib/session";
 
 import { apiFailure, post, textFields } from "@/shared/api/server-action";
 

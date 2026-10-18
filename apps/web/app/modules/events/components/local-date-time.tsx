@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { formatDate, formatEventWhen } from "@/modules/events/event-detail";
+import { formatDate, formatEventWhen } from "../lib/event-detail";
 
 /*
  * The server can't know the viewer's time zone, so these islands render UTC

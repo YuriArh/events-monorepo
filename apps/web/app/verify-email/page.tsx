@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-import { VerifyEmailForm } from "@/modules/auth/components/auth-forms";
-import { AuthPage } from "@/modules/auth/components/auth-page";
+import { AuthPage, VerifyEmailForm } from "@/modules/auth";
 
 type Props = { searchParams: Promise<{ token?: string | string[] }> };
 

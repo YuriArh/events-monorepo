@@ -56,9 +56,9 @@ named below. The root layout prefetches `me` and wraps the tree in
   prefetched and hydrated into the form.
 - `/login`, `/register`, `/forgot-password`, `/reset-password`,
   `/verify-email` — `AuthPage` plus the matching form from `auth-forms`,
-  submitted through Server Actions (`modules/auth/auth.actions.ts`).
+  submitted through Server Actions (`modules/auth/model/actions.ts`).
 - `/account` — `AccountSections`, guarded on the server, Server Actions in
-  `modules/account/account.actions.ts`.
+  `modules/account/model/actions.ts`.
 
 **Card.** The vendored `components/ui/card.tsx` uses React context without
 `"use client"`, so a Server Component can't render it. Server Components import
@@ -75,9 +75,9 @@ need a form.
 Events and the current user are fetched **on the server, into the TanStack
 Query cache**, and read on the client with `useQuery`:
 
-- Each module's `*.queries.ts` holds its shared query options
-  (`eventQueries.list/detail` in `modules/events/events.queries.ts`, `meQuery`
-  in `modules/auth/auth.queries.ts`) parameterised by a fetcher, so the server
+- Each module's `model/queries.ts` holds its shared query options
+  (`eventQueries.list/detail` in `modules/events`, `meQuery` in
+  `modules/auth`) parameterised by a fetcher, so the server
   prefetch and the client `useQuery` use the same key and function. `meKey`
   lives in `shared/query/query-client.ts`, which clears it on any 401.
 - A page gets the per-request server client with `getServerQueryClient()`
@@ -90,13 +90,13 @@ Query cache**, and read on the client with `useQuery`:
   The browser uses the singleton from `shared/query/query-client.ts`. Use
   `queryClient.query`: the older fetch/prefetch/ensure methods are deprecated
   in the installed TanStack Query.
-- The current user is `getMe()` (`modules/auth/session.server.ts`), deduplicated with
+- The current user is `getMe()` (`modules/auth/model/session.server.ts`), deduplicated with
   the layout's prefetch; pages use it to redirect or `notFound()` before any
   HTML is sent. Pure helpers (`safeNext`, `canModifyEvent`) live in
-  `modules/auth/session.ts`.
+  `modules/auth/lib/session.ts`.
 
 **Mutations.** Simple forms (sign-in, registration, password flows, account)
-are Server Actions in `modules/*/*.actions.ts` using `useActionState` with the
+are Server Actions in `modules/*/model/actions.ts` using `useActionState` with the
 `FormState` from `shared/forms/form-state.ts`; they work without JavaScript. The
 complex, interactive event form keeps TanStack Form and TanStack Query
 mutations through `/api`.
@@ -141,25 +141,41 @@ app/
   styles/        StyleX tokens
 ```
 
-Inside a module, files are named `<module>.<role>.ts`, like the API's:
+Every module has the same shape:
 
-| File                | Responsibility                                                  |
-| ------------------- | --------------------------------------------------------------- |
-| `*.api.ts`          | The module's API calls through `shared/api` (`request`)          |
-| `*.queries.ts`      | Query keys and `queryOptions`, parameterised by a `Fetcher`      |
-| `*.actions.ts`      | Server Actions (`"use server"`)                                  |
-| `*.server.ts`       | Server-only helpers (`next/headers`, the server query client)    |
-| `<name>.ts`         | Pure helpers for the module (`event-form.ts`, `session.ts`)      |
-| `components/*.tsx`  | The module's React components                                    |
+```
+modules/auth/
+  index.ts       public API — the only file other code imports
+  server.ts      server-only public API (only when the module has some)
+  components/    React components
+  model/         the module's data: queries.ts, actions.ts ("use server"), *.server.ts
+  lib/           pure helpers (session.ts: safeNext, canModifyEvent)
+  api/           the module's HTTP calls through shared/api (events.ts, geocoding.ts)
+```
 
-Tests sit next to the file they cover (`events.api.test.ts`).
+A module only has the folders it needs (`account` has no `lib/` or `api/`).
+Tests sit next to the file they cover (`model/queries.test.ts`).
+
+| Folder / file | Holds                                                                         |
+| ------------- | ----------------------------------------------------------------------------- |
+| `index.ts`    | Re-exports of what other code uses — nothing more, no logic                    |
+| `server.ts`   | Re-exports that import `next/headers` (e.g. `getMe`); client code never imports it |
+| `api/`        | `request` calls to the API and their response types                            |
+| `model/`      | Query keys and `queryOptions` (`Fetcher`-parameterised), Server Actions, server reads |
+| `lib/`        | Pure functions with no React or I/O                                            |
+| `components/` | The module's components; `"use client"` only where needed                     |
+
+**Imports.** Outside a module, import only its entry: `@/modules/events`, or
+`@/modules/auth/server` for server-only code — never a file inside it. Inside a
+module, use relative paths (`../model/queries`). `index.ts` must stay safe for
+client components: anything that imports `next/headers` goes through
+`server.ts` instead, or a client bundle would pull it in.
 
 **Dependencies point one way:** routes → `modules/*` → `shared/*`. `shared/`
-never imports a module. A module may import another module's files when the
-domain needs it (events read `meQuery` and `canModifyEvent` from `auth`).
-Import other folders through `@/…`; only siblings use `./…`. There are no
-barrel `index.ts` files: one would pull server-only code (`next/headers`)
-into client bundles.
+never imports a module. A module may use another module's public API when the
+domain needs it (events read `meQuery` and `canModifyEvent` from `auth`), as
+long as no cycle forms. `shared/` folders have no `index.ts`; import their
+files directly (`@/shared/api/request`).
 
 ## API module layering
 

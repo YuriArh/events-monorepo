@@ -1,7 +1,7 @@
 import { createEventInput } from "@repo/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import type { EventRecord } from "./events.api";
+import type { EventRecord } from "../api/events";
 import {
     emptyFormValues,
     formLevelError,

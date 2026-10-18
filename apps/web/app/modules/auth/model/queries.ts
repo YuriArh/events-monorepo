@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { type Fetcher, nullOn, request } from "@/shared/api/request";
 import { meKey } from "@/shared/query/query-client";
-import type { Me } from "./session";
+import type { Me } from "../lib/session";
 
 /** Null when signed out — a normal state, not an error. */
 export const fetchMe = (fetcher: Fetcher) =>

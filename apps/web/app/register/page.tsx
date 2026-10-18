@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-import { RegisterForm } from "@/modules/auth/components/auth-forms";
-import { AuthPage } from "@/modules/auth/components/auth-page";
+import { AuthPage, RegisterForm } from "@/modules/auth";
 
 export default function RegisterPage() {
     return (

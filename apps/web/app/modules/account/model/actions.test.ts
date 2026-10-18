@@ -16,7 +16,7 @@ vi.mock("@/shared/api/request.server", () => ({ serverFetch: vi.fn(), applySessi
 const { redirect } = await import("next/navigation");
 const { revalidatePath } = await import("next/cache");
 const { applySessionCookie, serverFetch } = await import("@/shared/api/request.server");
-const { changePassword, deleteAccount, logoutAll, resendVerification, updateProfile } = await import("./account.actions");
+const { changePassword, deleteAccount, logoutAll, resendVerification, updateProfile } = await import("./actions");
 
 const form = (fields: Record<string, string>) => {
     const data = new FormData();

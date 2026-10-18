@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { type Fetcher, nullOn, request } from "@/shared/api/request";
-import type { EventRecord } from "./events.api";
+import type { EventRecord } from "../api/events";
 
 /** The one definition of each cached resource — used by server prefetch and client useQuery alike. */
 export const eventKeys = {

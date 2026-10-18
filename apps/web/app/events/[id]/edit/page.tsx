@@ -3,12 +3,11 @@ import * as stylex from "@stylexjs/stylex";
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 
 import { Card, CardContent } from "@/shared/ui/card";
-import { EditEventForm } from "@/modules/events/components/edit-event-form";
+import { EditEventForm, eventQueries } from "@/modules/events";
 import { serverRequest } from "@/shared/api/request.server";
-import { eventQueries } from "@/modules/events/events.queries";
 import { getServerQueryClient } from "@/shared/query/query-client.server";
-import { canModifyEvent } from "@/modules/auth/session";
-import { getMe } from "@/modules/auth/session.server";
+import { canModifyEvent } from "@/modules/auth";
+import { getMe } from "@/modules/auth/server";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

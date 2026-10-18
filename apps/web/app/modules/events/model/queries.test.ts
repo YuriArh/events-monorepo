@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/shared/api/request";
-import { fetchEvent } from "./events.queries";
+import { fetchEvent } from "./queries";
 
 describe("fetchEvent", () => {
     it("is null for an unknown event", async () => {

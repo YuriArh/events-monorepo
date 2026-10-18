@@ -1,4 +1,4 @@
-import type { Address } from "./events.api";
+import type { Address } from "../api/events";
 
 const dayFormat = (timeZone?: string) =>
     new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone });

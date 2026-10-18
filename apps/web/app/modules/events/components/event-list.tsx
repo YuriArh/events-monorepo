@@ -13,10 +13,9 @@ import { Button, buttonStyleProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
-import type { EventRecord } from "@/modules/events/events.api";
-import { meQuery } from "@/modules/auth/auth.queries";
-import { eventQueries } from "@/modules/events/events.queries";
-import { canModifyEvent } from "@/modules/auth/session";
+import type { EventRecord } from "../api/events";
+import { canModifyEvent, meQuery } from "@/modules/auth";
+import { eventQueries } from "../model/queries";
 
 const styles = stylex.create({
     page: {

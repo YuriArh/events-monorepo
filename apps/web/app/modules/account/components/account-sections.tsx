@@ -4,13 +4,12 @@ import { useActionState } from "react";
 import * as stylex from "@stylexjs/stylex";
 import { useQuery } from "@tanstack/react-query";
 
-import { changePassword, deleteAccount, logoutAll, resendVerification, updateProfile } from "@/modules/account/account.actions";
-import { FormBanner, FormSuccess, authStyles } from "@/modules/auth/components/auth-page";
+import { changePassword, deleteAccount, logoutAll, resendVerification, updateProfile } from "../model/actions";
+import { authStyles, FormBanner, FormSuccess, meQuery } from "@/modules/auth";
 import { Card, CardContent } from "@/shared/ui/card";
 import { TextField } from "@/shared/ui/text-field";
 import { Button } from "@/components/ui/button";
 import { NO_FIELDS, bannerFor } from "@/shared/forms/form-errors";
-import { meQuery } from "@/modules/auth/auth.queries";
 import { useFocusFirstInvalid } from "@/shared/forms/use-focus-first-invalid";
 import { colors, typography } from "@/styles/tokens.stylex";
 

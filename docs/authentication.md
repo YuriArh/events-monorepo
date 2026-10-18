@@ -26,7 +26,7 @@ OAuth, no third-party auth library.
 | Input schemas (email, password rules, tokens) | `packages/contracts/src/index.ts` |
 | Tables `User`, `Session`, `AuthToken` | `packages/db/prisma/schema.prisma` |
 | Server-side API calls carrying the visitor's cookie; cookie relay | `apps/web/app/shared/api/request.server.ts`, `apps/web/app/shared/api/session-cookie.ts` |
-| `getMe()`, `meQuery`, `safeNext`, `canModifyEvent` | `apps/web/app/modules/auth/{session.server,auth.queries,session}.ts` |
+| `getMe()`, `meQuery`, `safeNext`, `canModifyEvent` | `apps/web/app/modules/auth/{model/session.server,model/queries,lib/session}.ts` |
 | Auth and account Server Actions | `apps/web/app/modules/{auth/auth,account/account}.actions.ts`, `apps/web/app/shared/api/server-action.ts` |
 
 ## Data model
@@ -243,7 +243,7 @@ deleted the account) are admin-only.
 
 The web app never decides access; it only hides what the API would refuse.
 
-- `getMe()` (`modules/auth/session.server.ts`) reads the current user on the server
+- `getMe()` (`modules/auth/model/session.server.ts`) reads the current user on the server
   into the TanStack Query cache (`meQuery`, deduplicated with the root
   layout's prefetch). Pages that need a session redirect before any HTML is
   sent:
@@ -255,7 +255,7 @@ The web app never decides access; it only hides what the API would refuse.
   Protected pages: `/account`, `/events/new`, `/events/[id]/edit` (the last
   renders "Only the organizer or an admin can edit this event." instead of
   the form when `canModifyEvent` is false).
-- `canModifyEvent` (`modules/auth/session.ts`) mirrors the API's `canModify` to show or
+- `canModifyEvent` (`modules/auth/lib/session.ts`) mirrors the API's `canModify` to show or
   hide edit/delete controls. If the two ever disagree, the API wins.
 - `safeNext` turns the `next` parameter of `/login` into a same-site path
   only (blocks `//host`, `/\host`, control-character tricks), so sign-in
@@ -423,7 +423,7 @@ Server Action that calls the API through `post`/`send` from
   `event.routes.test.ts` (ownership), `app.security.test.ts` (Origin check,
   rate limits, forwarded IP), `password.test.ts`, `crypto.test.ts`,
   `rate-limits.test.ts` (eviction flood). Helpers in `apps/api/src/test/auth.ts`.
-- Web: `modules/auth/auth.actions.test.ts`, `modules/account/account.actions.test.ts`, `modules/auth/session.test.ts`
+- Web: `modules/auth/model/actions.test.ts`, `modules/account/model/actions.test.ts`, `modules/auth/lib/session.test.ts`
   (`safeNext`, `canModifyEvent`), `shared/api/session-cookie.test.ts`.
 - E2E: `apps/e2e/tests/auth.spec.ts`, `account.spec.ts`; the signed-in state
   is prepared once in `auth.setup.ts`.

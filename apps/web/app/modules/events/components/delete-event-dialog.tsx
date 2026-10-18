@@ -14,8 +14,8 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Spinner } from "@/shared/ui/spinner";
-import { type EventRecord, eventsApi } from "@/modules/events/events.api";
-import { eventKeys } from "@/modules/events/events.queries";
+import { type EventRecord, eventsApi } from "../api/events";
+import { eventKeys } from "../model/queries";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

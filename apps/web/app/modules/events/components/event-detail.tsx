@@ -6,9 +6,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import { EventOwnerActions } from "./event-owner-actions";
 import { LocalDateTime } from "./local-date-time";
-import { formatAddressLines, osmEmbedUrl, osmLinkUrl } from "@/modules/events/event-detail";
-import { imageUrl } from "@/modules/events/events.api";
-import { eventQueries } from "@/modules/events/events.queries";
+import { formatAddressLines, osmEmbedUrl, osmLinkUrl } from "../lib/event-detail";
+import { imageUrl } from "../api/events";
+import { eventQueries } from "../model/queries";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

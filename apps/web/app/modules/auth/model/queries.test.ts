@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/shared/api/request";
-import { fetchMe } from "./auth.queries";
+import { fetchMe } from "./queries";
 
 describe("fetchMe", () => {
     it("returns the user", async () => {

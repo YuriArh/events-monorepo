@@ -9,9 +9,8 @@ import { PencilIcon, Trash2Icon } from "lucide-react";
 
 import { DeleteEventDialog } from "./delete-event-dialog";
 import { Button, buttonStyleProps } from "@/components/ui/button";
-import type { EventRecord } from "@/modules/events/events.api";
-import { meQuery } from "@/modules/auth/auth.queries";
-import { canModifyEvent } from "@/modules/auth/session";
+import type { EventRecord } from "../api/events";
+import { canModifyEvent, meQuery } from "@/modules/auth";
 
 const styles = stylex.create({
     actions: { display: "flex", gap: "0.5rem" },

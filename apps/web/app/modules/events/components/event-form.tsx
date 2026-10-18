@@ -5,16 +5,16 @@ import * as stylex from "@stylexjs/stylex";
 import { useForm } from "@tanstack/react-form";
 import { createEventInput } from "@repo/contracts";
 
-import { AddressSearch } from "@/modules/geocoding/components/address-search";
+import { AddressSearch } from "@/modules/geocoding";
 import { DateTimePicker } from "@/shared/ui/date-time-picker";
 import { Spinner } from "@/shared/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formLevelError, toEventInput, type EventFormValues } from "@/modules/events/event-form";
+import { formLevelError, toEventInput, type EventFormValues } from "../lib/event-form";
 import { issuesByField } from "@/shared/forms/form-errors";
-import { ApiError, imageUrl } from "@/modules/events/events.api";
+import { ApiError, imageUrl } from "../api/events";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
 /** Field names this form renders an inline error under — kept in one place so

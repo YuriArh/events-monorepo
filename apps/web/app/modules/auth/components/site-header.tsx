@@ -4,9 +4,9 @@ import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { logout } from "@/modules/auth/auth.actions";
+import { logout } from "../model/actions";
 import { Button, buttonStyleProps } from "@/components/ui/button";
-import { meQuery } from "@/modules/auth/auth.queries";
+import { meQuery } from "../model/queries";
 import { meKey } from "@/shared/query/query-client";
 import { colors, typography } from "@/styles/tokens.stylex";
 

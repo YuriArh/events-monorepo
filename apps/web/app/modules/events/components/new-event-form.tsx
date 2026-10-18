@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { EventForm } from "./event-form";
-import { emptyFormValues, resolveImageKey, toEventInput, type EventFormValues } from "@/modules/events/event-form";
-import { eventsApi, uploadImage } from "@/modules/events/events.api";
-import { eventKeys } from "@/modules/events/events.queries";
+import { emptyFormValues, resolveImageKey, toEventInput, type EventFormValues } from "../lib/event-form";
+import { eventsApi, uploadImage } from "../api/events";
+import { eventKeys } from "../model/queries";
 
 export function NewEventForm() {
     const router = useRouter();

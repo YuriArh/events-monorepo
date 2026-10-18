@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import * as stylex from "@stylexjs/stylex";
 
-import { forgotPassword, login, register, resetPassword, verifyEmail } from "@/modules/auth/auth.actions";
+import { forgotPassword, login, register, resetPassword, verifyEmail } from "../model/actions";
 import { FormBanner, FormSuccess, authStyles } from "./auth-page";
 import { TextField } from "@/shared/ui/text-field";
 import { Button } from "@/components/ui/button";

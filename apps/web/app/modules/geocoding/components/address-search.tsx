@@ -14,7 +14,7 @@ import {
     type AddressSelection,
     type GeocodeState,
     type GeocodeSuggestion,
-} from "@/modules/geocoding/geocoding.api";
+} from "../api/geocoding";
 import { useDebouncedValue } from "@/shared/lib/use-debounced-value";
 import { colors, radius, typography } from "@/styles/tokens.stylex";
 
