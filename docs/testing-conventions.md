@@ -69,8 +69,8 @@ test that passes against the broken code is worse than none.
 
 ## Server Actions and server rendering
 
-Server Actions (`apps/web/app/actions/*`) are unit-tested next to the action
-with `vi.mock("@/lib/api.server")` (so no API is needed) and a mock of
+Server Actions (`apps/web/app/modules/*/*.actions.ts`) are unit-tested next to the action
+with `vi.mock("@/shared/api/request.server")` (so no API is needed) and a mock of
 `next/navigation` (`redirect` throws, as in Next) and `next/headers` where
 cookies are set. Assert the returned `FormState` and the calls made to the API.
 

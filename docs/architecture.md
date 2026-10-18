@@ -31,9 +31,9 @@ Fastify route → service → repository → Prisma → Postgres
 
 The browser only ever talks to the web origin, so the `sid` cookie belongs to
 the web host and the Next server can read it. The Next server calls the API
-directly with `serverFetch`/`serverRequest` (`lib/api.server.ts`), forwarding
+directly with `serverFetch`/`serverRequest` (`shared/api/request.server.ts`), forwarding
 the visitor's cookie and IP. The browser uses the same `apiFetch`/`request`
-core (`lib/api.ts`) with relative URLs. The web app does not import
+core (`shared/api/request.ts`) with relative URLs. The web app does not import
 `@repo/db`; only `apps/api` touches the database.
 
 ## Web app routes
@@ -56,13 +56,13 @@ named below. The root layout prefetches `me` and wraps the tree in
   prefetched and hydrated into the form.
 - `/login`, `/register`, `/forgot-password`, `/reset-password`,
   `/verify-email` — `AuthPage` plus the matching form from `auth-forms`,
-  submitted through Server Actions (`app/actions/auth.ts`).
+  submitted through Server Actions (`modules/auth/auth.actions.ts`).
 - `/account` — `AccountSections`, guarded on the server, Server Actions in
-  `app/actions/account.ts`.
+  `modules/account/account.actions.ts`.
 
 **Card.** The vendored `components/ui/card.tsx` uses React context without
 `"use client"`, so a Server Component can't render it. Server Components import
-`Card`/`CardContent` from `components/card.tsx`, a client re-export of it. Do
+`Card`/`CardContent` from `shared/ui/card.tsx`, a client re-export of it. Do
 not import `components/ui/card` from a Server Component.
 
 Create and edit are full routes, not a dialog over the list page: the list's
@@ -75,34 +75,36 @@ need a form.
 Events and the current user are fetched **on the server, into the TanStack
 Query cache**, and read on the client with `useQuery`:
 
-- `lib/queries.ts` holds the shared query options (`eventQueries.list/detail`,
-  `meQuery`, `meKey`) parameterised by a fetcher, so the server prefetch and
-  the client `useQuery` use the same key and function.
+- Each module's `*.queries.ts` holds its shared query options
+  (`eventQueries.list/detail` in `modules/events/events.queries.ts`, `meQuery`
+  in `modules/auth/auth.queries.ts`) parameterised by a fetcher, so the server
+  prefetch and the client `useQuery` use the same key and function. `meKey`
+  lives in `shared/query/query-client.ts`, which clears it on any 401.
 - A page gets the per-request server client with `getServerQueryClient()`
-  (`lib/query-client.server.ts`: React `cache`, no retry, `staleTime > 0`),
+  (`shared/query/query-client.server.ts`: React `cache`, no retry, `staleTime > 0`),
   fills it with `prefetch(queryClient, options)` (same file:
   `queryClient.query(options)` with errors swallowed, so the client's
   `useQuery` shows them) or awaits `queryClient.query(options)` when it needs
   the data itself, passing `serverRequest` as the fetcher, and renders its
   client component inside `<HydrationBoundary state={dehydrate(queryClient)}>`.
-  The browser uses the singleton from `lib/query-client.ts`. Use
+  The browser uses the singleton from `shared/query/query-client.ts`. Use
   `queryClient.query`: the older fetch/prefetch/ensure methods are deprecated
   in the installed TanStack Query.
-- The current user is `getMe()` (`lib/session.server.ts`), deduplicated with
+- The current user is `getMe()` (`modules/auth/session.server.ts`), deduplicated with
   the layout's prefetch; pages use it to redirect or `notFound()` before any
   HTML is sent. Pure helpers (`safeNext`, `canModifyEvent`) live in
-  `lib/session.ts`.
+  `modules/auth/session.ts`.
 
 **Mutations.** Simple forms (sign-in, registration, password flows, account)
-are Server Actions in `app/actions/*` using `useActionState` with the
-`FormState` from `lib/form-state.ts`; they work without JavaScript. The
+are Server Actions in `modules/*/*.actions.ts` using `useActionState` with the
+`FormState` from `shared/forms/form-state.ts`; they work without JavaScript. The
 complex, interactive event form keeps TanStack Form and TanStack Query
 mutations through `/api`.
 
 **Cookies are set only in Server Actions** (and Route Handlers), never while
 rendering. Every Server Action calls the API through `send`/`post`
-(`app/actions/shared.ts`), which relays the `Set-Cookie` of every API answer
-with `cookies().set/delete` (`applySessionCookie`, `lib/set-cookie.ts`): sign-in
+(`shared/api/server-action.ts`), which relays the `Set-Cookie` of every API answer
+with `cookies().set/delete` (`applySessionCookie`, `shared/api/session-cookie.ts`): sign-in
 sets it, sign-out clears it, and any action can carry a renewal. Actions that
 must end a session regardless (sign-out, sign-out everywhere, account
 deletion) also delete `sid` themselves.
@@ -113,6 +115,51 @@ renewal triggered by a server-side fetch is not delivered to the browser; it
 happens when a browser-side `/api` call or Server Action next carries the
 session. A visitor who only browses server-rendered pages is therefore renewed
 late, not logged out early.
+
+## Web modules
+
+`apps/web/app` mirrors the API: route folders stay thin, and the code lives
+in feature modules plus a shared layer. Neither `modules/` nor `shared/`
+contains a `page.tsx`, so neither is a route.
+
+```
+app/
+  <route>/page.tsx, layout.tsx, providers.tsx   routing and composition only
+  modules/
+    auth/        session, current user (meQuery, getMe), sign-in/up Server Actions, auth forms, header
+    account/     account Server Actions and page sections
+    events/      events API, query options, form/detail helpers, event components
+    geocoding/   address lookup API and the address search field
+  shared/
+    api/         HTTP client: request (browser + server core), request.server,
+                 session-cookie (SESSION_COOKIE, Set-Cookie relay), server-action (send/post)
+    query/       QueryClient factory (browser singleton, per-request server client), meKey
+    forms/       FormState, field errors, focus-first-invalid
+    ui/          app-level UI on top of the vendored kit (Card, Spinner, TextField, DateTimePicker)
+    lib/         generic helpers (date-time, useDebouncedValue)
+  components/ui/ vendored registry code (regenerate, don't hand-edit)
+  styles/        StyleX tokens
+```
+
+Inside a module, files are named `<module>.<role>.ts`, like the API's:
+
+| File                | Responsibility                                                  |
+| ------------------- | --------------------------------------------------------------- |
+| `*.api.ts`          | The module's API calls through `shared/api` (`request`)          |
+| `*.queries.ts`      | Query keys and `queryOptions`, parameterised by a `Fetcher`      |
+| `*.actions.ts`      | Server Actions (`"use server"`)                                  |
+| `*.server.ts`       | Server-only helpers (`next/headers`, the server query client)    |
+| `<name>.ts`         | Pure helpers for the module (`event-form.ts`, `session.ts`)      |
+| `components/*.tsx`  | The module's React components                                    |
+
+Tests sit next to the file they cover (`events.api.test.ts`).
+
+**Dependencies point one way:** routes → `modules/*` → `shared/*`. `shared/`
+never imports a module. A module may import another module's files when the
+domain needs it (events read `meQuery` and `canModifyEvent` from `auth`).
+Import other folders through `@/…`; only siblings use `./…`. There are no
+barrel `index.ts` files: one would pull server-only code (`next/headers`)
+into client bundles.
 
 ## API module layering
 

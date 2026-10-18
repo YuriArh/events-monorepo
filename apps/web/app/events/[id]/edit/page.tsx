@@ -2,13 +2,13 @@ import { notFound, redirect } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 
-import { Card, CardContent } from "@/components/card";
-import { EditEventForm } from "@/components/edit-event-form";
-import { serverRequest } from "@/lib/api.server";
-import { eventQueries } from "@/lib/queries";
-import { getServerQueryClient } from "@/lib/query-client.server";
-import { canModifyEvent } from "@/lib/session";
-import { getMe } from "@/lib/session.server";
+import { Card, CardContent } from "@/shared/ui/card";
+import { EditEventForm } from "@/modules/events/components/edit-event-form";
+import { serverRequest } from "@/shared/api/request.server";
+import { eventQueries } from "@/modules/events/events.queries";
+import { getServerQueryClient } from "@/shared/query/query-client.server";
+import { canModifyEvent } from "@/modules/auth/session";
+import { getMe } from "@/modules/auth/session.server";
 import { colors, typography } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

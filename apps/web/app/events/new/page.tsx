@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
 
-import { Card, CardContent } from "@/components/card";
-import { NewEventForm } from "@/components/new-event-form";
-import { getMe } from "@/lib/session.server";
+import { Card, CardContent } from "@/shared/ui/card";
+import { NewEventForm } from "@/modules/events/components/new-event-form";
+import { getMe } from "@/modules/auth/session.server";
 import { colors } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

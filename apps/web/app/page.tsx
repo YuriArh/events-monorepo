@@ -1,9 +1,9 @@
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 
-import { EventList } from "@/components/event-list";
-import { serverRequest } from "@/lib/api.server";
-import { eventQueries } from "@/lib/queries";
-import { getServerQueryClient, prefetch } from "@/lib/query-client.server";
+import { EventList } from "@/modules/events/components/event-list";
+import { serverRequest } from "@/shared/api/request.server";
+import { eventQueries } from "@/modules/events/events.queries";
+import { getServerQueryClient, prefetch } from "@/shared/query/query-client.server";
 
 export default async function HomePage() {
     const queryClient = getServerQueryClient();

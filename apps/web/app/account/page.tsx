@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import * as stylex from "@stylexjs/stylex";
 
-import { AccountSections } from "@/components/account-sections";
-import { getMe } from "@/lib/session.server";
+import { AccountSections } from "@/modules/account/components/account-sections";
+import { getMe } from "@/modules/auth/session.server";
 import { colors } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({

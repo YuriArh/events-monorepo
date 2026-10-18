@@ -15,17 +15,28 @@ pnpm test:e2e          # Playwright, boots both apps
 - **KISS** — pick the simplest design that meets the requirement. No speculative
   options, layers or abstractions "for later".
 - **DRY** — one source of truth for each rule, shape and piece of UI. Reuse what
-  exists (`@repo/contracts`, `lib/*` helpers, shared components) before adding a
+  exists (`@repo/contracts`, `shared/*` helpers, shared components) before adding a
   near-copy; extract once a second real use appears.
 - **Server rendering first** — in `apps/web`, every page is a Server Component
   and its HTML arrives with the data in it. Events and the current user are
   always fetched on the server **into the TanStack Query cache** (prefetch +
   `HydrationBoundary`) and read on the client with `useQuery` using the shared
-  query options in `lib/queries.ts` — never fetched only on the client.
+  query options in the module's `*.queries.ts` — never fetched only on the client.
   `"use client"` goes on the smallest component that needs the browser.
 - **Mutations** — simple forms use Server Actions (`useActionState`);
   complex interactive forms use TanStack Form + TanStack Query mutations
   through the `/api` proxy, then invalidate the affected queries.
+- **Modular architecture** — code is grouped by feature, not by file kind.
+  Each feature in `apps/api/src/modules/<feature>/` (`auth`, `users`,
+  `events`, `geocoding`) and `apps/web/app/modules/<feature>/` (`auth`,
+  `account`, `events`, `geocoding`) owns its code — on the web: its API calls,
+  queries, actions, helpers and components; cross-cutting code goes to
+  `apps/web/app/shared/` (`api/` — the HTTP client, `query/`, `forms/`, `ui/`,
+  `lib/`) or `apps/api/src/lib/`. Dependencies point one way: routes →
+  modules → shared; `shared/` never imports a module. Route folders in
+  `apps/web/app` only compose modules. A new feature is a new module; no new
+  top-level `lib/`, `actions/` or `components/` buckets. Details and file
+  naming: [docs/architecture.md](docs/architecture.md#web-modules).
 
 Before writing code, read the conventions that apply:
 
