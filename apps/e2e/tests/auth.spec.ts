@@ -97,7 +97,10 @@ test("register, own an event, sign out, sign back in", async ({ page, playwright
         });
 
         await test.step("a wrong password is refused", async () => {
-            await page.getByRole("link", { name: "Sign in" }).click();
+            // The register page's own link; the header has another "Sign in".
+            await page.getByRole("main").getByRole("link", { name: "Sign in" }).click();
+            // The register form has Email/Password too: wait for the login page before filling.
+            await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
             await page.getByLabel("Email").fill(email);
             await page.getByLabel("Password").fill("not the password");
             await page.getByRole("button", { name: "Sign in" }).click();
