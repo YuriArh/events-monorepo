@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 
-import { rateLimitOption } from "../../lib/rate-limits.js";
+import { rateLimits } from "../../lib/rate-limits.js";
 import { clearSessionCookie } from "../../lib/session-cookie.js";
 import { currentUser, requireAuth } from "../../plugins/session.js";
 import {
@@ -30,7 +30,7 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete(
     "/me",
-    rateLimitOption(app, "deleteAccount"),
+    { config: { rateLimit: rateLimits.deleteAccount } },
     async (request, reply) => {
       const { password } = deleteAccountSchema.parse(request.body);
 

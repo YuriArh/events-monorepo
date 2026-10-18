@@ -1,9 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 
-import {
-  type AuthRateLimitName,
-  rateLimitOption,
-} from "../../lib/rate-limits.js";
+import { rateLimits } from "../../lib/rate-limits.js";
 import {
   clearSessionCookie,
   setSessionCookie,
@@ -57,9 +54,7 @@ const sessionMeta = (request: FastifyRequest): SessionMeta => ({
 });
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
-  const limited = (name: AuthRateLimitName) => rateLimitOption(app, name);
-
-  app.post("/register", limited("register"), async (request, reply) => {
+  app.post("/register", { config: { rateLimit: rateLimits.register } }, async (request, reply) => {
     const input = registerSchema.parse(request.body);
 
     try {
@@ -82,7 +77,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/login", limited("login"), async (request, reply) => {
+  app.post("/login", { config: { rateLimit: rateLimits.login } }, async (request, reply) => {
     const input = loginSchema.parse(request.body);
 
     try {
@@ -118,7 +113,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/password/change",
-    { preHandler: requireAuth, ...limited("changePassword") },
+    { preHandler: requireAuth, config: { rateLimit: rateLimits.changePassword } },
     async (request, reply) => {
       const input = changePasswordSchema.parse(request.body);
 
@@ -144,7 +139,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   // Tokens travel in the body, so they never land in API access logs.
   app.post(
     "/password/forgot",
-    limited("forgotPassword"),
+    { config: { rateLimit: rateLimits.forgotPassword } },
     async (request, reply) => {
       const { email } = forgotPasswordSchema.parse(request.body);
 
@@ -165,7 +160,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/password/reset",
-    limited("resetPassword"),
+    { config: { rateLimit: rateLimits.resetPassword } },
     async (request, reply) => {
       const { token, newPassword } = resetPasswordSchema.parse(request.body);
 
@@ -179,7 +174,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.post("/email/verify", limited("verifyEmail"), async (request, reply) => {
+  app.post("/email/verify", { config: { rateLimit: rateLimits.verifyEmail } }, async (request, reply) => {
     const { token } = verifyEmailSchema.parse(request.body);
 
     try {
@@ -193,7 +188,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/email/resend",
-    { preHandler: requireAuth, ...limited("resendVerification") },
+    { preHandler: requireAuth, config: { rateLimit: rateLimits.resendVerification } },
     async (request, reply) => {
       await authService.resendVerification(currentUser(request), app.mailer);
 

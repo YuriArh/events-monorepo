@@ -17,7 +17,6 @@ import { geocodeRoutes } from "./modules/geocoding/geocode.routes.js";
 declare module "fastify" {
   interface FastifyInstance {
     mailer: Mailer;
-    rateLimitsEnabled: boolean;
   }
 }
 
@@ -44,11 +43,17 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   app.decorate("mailer", options.mailer ?? new ConsoleMailer((line) => app.log.info(line)));
 
-  app.decorate("rateLimitsEnabled", options.rateLimits ?? true);
-
-  // Only routes that opt in are limited. preHandler (not the default
-  // onRequest) so key generators can read the parsed body and request.user.
-  app.register(rateLimit, { global: false, hook: "preHandler" });
+  // Only routes with `config.rateLimit` (from lib/rate-limits.ts) are limited;
+  // without the plugin that config is ignored. preHandler runs after body
+  // parsing and the session hook, so keys can use the email and the user.
+  if (options.rateLimits ?? true) {
+    app.register(rateLimit, {
+      global: false,
+      hook: "preHandler",
+      errorResponseBuilder: (_request, context) =>
+        Object.assign(new Error("Too many attempts. Please try again later."), { statusCode: context.statusCode }),
+    });
+  }
 
   /**
    * CSRF defence in depth. SameSite=Lax already keeps the cookie off
