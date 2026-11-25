@@ -391,7 +391,15 @@ links to the console.
 
 ## Deploying
 
-Production layout: nginx in front, three upstream roles.
+Production runs as two Docker images (`apps/api/Dockerfile`,
+`apps/web/Dockerfile`) behind a reverse proxy: Traefik (Dokploy) or nginx. The
+API is **bundled** by esbuild into one file (`apps/api/esbuild.config.mjs`;
+only `argon2` stays external) and the web app is built with Next's
+`output: "standalone"`. Image, compose and Dokploy details:
+[docker-deployment.md](docker-deployment.md). The rules below hold for any proxy.
+
+Production layout: a reverse proxy in front, three upstream roles. (nginx is
+named below; Traefik routes the same way.)
 
 - `/api/` and `/uploads/` go straight to Fastify.
 - `/` goes to Next, built with `API_PROXY=off` (nginx does the proxying the

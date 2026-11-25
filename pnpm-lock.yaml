@@ -114,6 +114,13 @@ importers:
 
   apps/api:
     dependencies:
+      argon2:
+        specifier: ^0.45.1
+        version: 0.45.1
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.5.14
+        version: 2.5.14
       '@fastify/cookie':
         specifier: ^11.1.2
         version: 11.1.2
@@ -135,25 +142,21 @@ importers:
       '@repo/db':
         specifier: workspace:*
         version: link:../../packages/db
-      argon2:
-        specifier: ^0.45.1
-        version: 0.45.1
-      fastify:
-        specifier: ^5.12.5
-        version: 5.12.5
-      fastify-plugin:
-        specifier: ^6.0.0
-        version: 6.0.0
-    devDependencies:
-      '@biomejs/biome':
-        specifier: 2.5.14
-        version: 2.5.14
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      fastify:
+        specifier: ^5.12.5
+        version: 5.12.5
+      fastify-plugin:
+        specifier: ^6.0.0
+        version: 6.0.0
       tsx:
         specifier: 4.23.13
         version: 4.23.13

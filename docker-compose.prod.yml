@@ -1,0 +1,82 @@
+# Production stack: Postgres, a one-off migration, the API and the web app.
+# There is no reverse proxy here on purpose: TLS and routing belong to Traefik
+# (Dokploy ships one) — see docs/docker-deployment.md for the two routes it
+# needs. Nothing publishes a port; Traefik reaches the containers by network.
+#
+# Variables (SITE_URL, POSTGRES_PASSWORD; see .env.prod.example):
+#   - Dokploy: enter them in the service's Environment tab. No file is needed
+#     and no secret lives on disk or in the repository.
+#   - Plain Compose: copy .env.prod.example to .env.prod (gitignored), fill it
+#     in, then
+#       docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+
+name: eventapp
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eventapp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: eventapp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventapp -d eventapp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Runs `prisma migrate deploy` and exits. The API starts only after it succeeded.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://eventapp:${POSTGRES_PASSWORD}@postgres:5432/eventapp?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://eventapp:${POSTGRES_PASSWORD}@postgres:5432/eventapp?schema=public
+      # The public https:// origin: Origin check, links in emails, Secure cookie.
+      WEB_ORIGIN: ${SITE_URL:?set SITE_URL}
+      # Whose X-Forwarded-For Fastify believes: the proxy and the web container.
+      # The API publishes no port, so only containers on the Docker networks
+      # (private ranges) can reach it.
+      TRUSTED_PROXY: ${TRUSTED_PROXY:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the build (see apps/web/Dockerfile).
+        SITE_URL: ${SITE_URL:?set SITE_URL}
+        API_INTERNAL_URL: http://api:4000
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+volumes:
+  postgres-data:
+  uploads:

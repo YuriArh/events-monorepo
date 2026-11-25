@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "NODE_ENV=development tsx watch --env-file=.env src/server.ts",
-    "build": "tsc",
+    "build": "node esbuild.config.mjs",
     "start": "node --env-file=.env dist/server.js",
     "lint": "biome lint .",
     "check-types": "tsc --noEmit",
@@ -14,6 +14,10 @@
     "test:db:migrate": "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/eventapp_test pnpm --filter @repo/db exec prisma migrate deploy"
   },
   "dependencies": {
+    "argon2": "^0.45.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@fastify/multipart": "^10.1.1",
@@ -21,14 +25,11 @@
     "@fastify/static": "^10.1.4",
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
-    "argon2": "^0.45.1",
-    "fastify": "^5.12.5",
-    "fastify-plugin": "^6.0.0"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.5.14",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "26.4.1",
+    "esbuild": "^0.28.2",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
     "vitest": "5.0.1"

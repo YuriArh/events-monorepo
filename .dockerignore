@@ -1,0 +1,22 @@
+# Keep the build context small and the layer cache stable: nothing here is
+# needed to build an image (turbo prune copies only what each app needs).
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/test-results
+**/playwright-report
+apps/api/uploads
+packages/db/src/generated
+
+.git
+.claude
+.superpowers
+docs
+*.md
+
+# Secrets and local config never go into an image.
+**/.env
+**/.env.*
+!**/.env.example

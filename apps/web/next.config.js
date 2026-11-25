@@ -10,6 +10,10 @@ const proxyEnabled = process.env.API_PROXY !== "off";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    // Self-contained server (server.js + only the files it traces) for the
+    // Docker image; see apps/web/Dockerfile. `next dev` and the e2e suite are
+    // unaffected.
+    output: "standalone",
     // Same-origin API for the browser: the session cookie belongs to the web
     // host, so Server Components and Server Actions can read it.
     async rewrites() {

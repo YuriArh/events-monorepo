@@ -1,5 +1,9 @@
 # Deploying to a server
 
+> **Docker is the primary way.** [docker-deployment.md](docker-deployment.md)
+> covers images, `docker-compose.prod.yml` and Dokploy/Traefik. This page is
+> the alternative without containers: processes under systemd behind nginx.
+
 How to run eventapp on one Linux server behind nginx: Postgres, the Fastify
 API, the Next.js web app and nginx on the same machine. The rules behind each
 step (why nginx routes `/api` itself, who `TRUSTED_PROXY` must list) are in
@@ -18,7 +22,7 @@ recipe.
 Only nginx is reachable from outside. The browser sees one origin, so the
 `sid` session cookie needs no `Domain` and no CORS is involved.
 
-## Before you start: three blockers
+## Before you start: blockers
 
 Fix these first, or the deployment will not run.
 
@@ -27,15 +31,11 @@ Fix these first, or the deployment will not run.
    This is deliberate: the console mailer would print password-reset links to
    the log. Wire an SMTP or provider-backed `Mailer` into
    `apps/api/src/server.ts` (`buildApp({ mailer })`) before deploying.
-2. **Run the API with `tsx`, not `node`.** The workspace packages
-   (`@repo/db`, `@repo/contracts`) export TypeScript source, and the generated
-   Prisma client resolves its runtime only under `tsx`. Plain
-   `node dist/server.js` — which is what `pnpm --filter api start` runs today —
-   fails with `Unknown file extension ".ts"`, and with type stripping enabled
-   (the Node 24 default) with `Cannot find module
-   '@prisma/client-runtime-utils'`. `tsx` is a dev dependency, so install
-   dependencies **without** `--prod`. (Follow-up: change the `start` script,
-   or bundle the API.)
+2. **Build the API before starting it.** `pnpm build` bundles the API and the
+   workspace packages into one file, `apps/api/dist/server.js`, which plain
+   `node` runs (`pnpm --filter api start`). Only `argon2`, a native addon, is
+   loaded from `node_modules`, so install dependencies on the server itself
+   (not on another OS) and keep dev dependencies: the build needs them.
 3. **The pnpm that wrote the lockfile.** `pnpm-lock.yaml` is in the
    two-document format of newer pnpm, which `pnpm@10.15.1` (the
    `packageManager` field) cannot read. Install the same pnpm version you use
@@ -148,7 +148,7 @@ After=network.target postgresql.service
 [Service]
 User=eventapp
 WorkingDirectory=/srv/eventapp/app/apps/api
-ExecStart=/srv/eventapp/app/apps/api/node_modules/.bin/tsx --env-file=.env dist/server.js
+ExecStart=/usr/bin/node --env-file=.env dist/server.js
 Restart=on-failure
 
 [Install]
@@ -315,7 +315,7 @@ today.
 | Symptom | Cause |
 | --- | --- |
 | API exits: `A real Mailer must be configured…` | Blocker 1: no production mailer wired in. |
-| API exits: `Unknown file extension ".ts"` or `Cannot find module '@prisma/client-runtime-utils'` | Blocker 2: started with `node`; use `tsx`. |
+| API exits: `Cannot find module '…/dist/server.js'` | Blocker 2: run `pnpm build` first. |
 | Sign-in and every other form fail; Next logs that the `Origin` header doesn't match the host | nginx doesn't pass `Host $host` to Next, or the public host differs (`serverActions.allowedOrigins`). |
 | Pages error or render without data; Next logs `ECONNREFUSED` | `API_INTERNAL_URL` wrong at runtime, or the API is down. |
 | Browser `/api/*` requests get Next's 404 page | nginx has no `location /api/` block, so `/api` falls through to Next (built with `API_PROXY=off`, it doesn't proxy). |
